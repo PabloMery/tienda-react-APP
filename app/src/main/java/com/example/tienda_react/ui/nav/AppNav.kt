@@ -16,13 +16,14 @@ import com.example.tienda_react.viewmodel.CartViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 private sealed class Route(val route: String, val label: String, val icon: String) {
-    data object Home       : Route("home",      "Inicio",    "🏠")
-    data object Productos  : Route("productos", "Productos", "🛒")
-    data object Carrito    : Route("carrito",   "Carrito",   "🧺")
-    data object DebugAssets : Route("debug-assets", "Debug", "🧪")
+    data object Home         : Route("home",        "Inicio",   "🏠")
+    data object Productos    : Route("productos",   "Productos","🛒")
+    data object QuienesSomos : Route("quienes",     "Nosotros", "👥")   // ⬅️ NUEVA RUTA
+    data object Carrito      : Route("carrito",     "Carrito",  "🧺")
+    data object DebugAssets  : Route("debug-assets","Debug",    "🧪")
 
-    data object Login       : Route("login",        "Iniciar sesión", "")
-    data object Registro    : Route("registro",     "Registro",        "")
+    data object Login        : Route("login",       "Iniciar sesión", "")
+    data object Registro     : Route("registro",    "Registro",        "")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,7 +38,8 @@ fun AppNav() {
     val currentRoute = backEntry?.destination?.route?.substringBefore("/")
     val ui = cartVm.ui.collectAsState().value
 
-    val items = listOf(Route.Home, Route.Productos, Route.Carrito)
+    // ⬇️ Agregamos QuienesSomos a la barra inferior
+    val items = listOf(Route.Home, Route.Productos, Route.QuienesSomos, Route.Carrito)
 
     val showBottomBar = when (currentRoute) {
         Route.Login.route, Route.Registro.route -> false
@@ -45,14 +47,16 @@ fun AppNav() {
     }
 
     val topTitle = when (currentRoute) {
-        Route.Login.route       -> "Iniciar sesión"
-        Route.Registro.route    -> "Registro"
-        Route.Home.route        -> "TiendaReact"
-        Route.Productos.route   -> "Productos"
-        Route.Carrito.route     -> "Carrito (${ui.totalItems})"
-        Route.DebugAssets.route -> "Debug assets"
-        else                    -> "TiendaReact"
+        Route.Login.route        -> "Iniciar sesión"
+        Route.Registro.route     -> "Registro"
+        Route.Home.route         -> "TiendaReact"
+        Route.Productos.route    -> "Productos"
+        Route.QuienesSomos.route -> "Quiénes somos"      // ⬅️ Título TopBar
+        Route.Carrito.route      -> "Carrito (${ui.totalItems})"
+        Route.DebugAssets.route  -> "Debug assets"
+        else                     -> "TiendaReact"
     }
+
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text(topTitle) }) },
         bottomBar = {
@@ -76,12 +80,13 @@ fun AppNav() {
                                 }
                             },
                             icon = {
-                                if (item is Route.Carrito && ui.totalItems > 0) {
-                                    BadgedBox(badge = { Badge { Text("${ui.totalItems}") } }) {
-                                        Text(item.icon)
+                                when {
+                                    item is Route.Carrito && ui.totalItems > 0 -> {
+                                        BadgedBox(badge = { Badge { Text("${ui.totalItems}") } }) {
+                                            Text(item.icon)
+                                        }
                                     }
-                                } else {
-                                    Text(item.icon)
+                                    else -> Text(item.icon)
                                 }
                             },
                             label = { Text(item.label) }
@@ -93,8 +98,7 @@ fun AppNav() {
     ) { pad ->
         NavHost(
             navController = nav,
-            // ⬇️ Cambiado a Login para que parta en autenticación
-            startDestination = Route.Login.route,
+            startDestination = Route.Login.route, // ⬅️ Mantengo Login como inicio
             modifier = Modifier.padding(pad)
         ) {
             // ---------- Auth ----------
@@ -102,7 +106,6 @@ fun AppNav() {
                 LoginScreen(
                     onGoRegistro = { nav.navigate(Route.Registro.route) },
                     onLoginOk = {
-                        // Ir a Home y remover Login del backstack
                         nav.navigate(Route.Home.route) {
                             popUpTo(Route.Login.route) { inclusive = true }
                             launchSingleTop = true
@@ -114,11 +117,10 @@ fun AppNav() {
             composable(Route.Registro.route) {
                 RegistroScreen(
                     onBackLogin = { nav.popBackStack() },
-                    onRegistroOk = { nav.popBackStack() } // vuelve a Login
+                    onRegistroOk = { nav.popBackStack() }
                 )
             }
 
-            // ---------- Tabs ----------
             composable(Route.Home.route) {
                 HomeScreen(
                     onGo = { nav.navigate(Route.Productos.route) },
@@ -131,6 +133,9 @@ fun AppNav() {
                     onGoCart = { nav.navigate(Route.Carrito.route) },
                     cartVm = cartVm
                 )
+            }
+            composable(Route.QuienesSomos.route) {
+                QuienesSomosScreen()
             }
             composable("detalle/{id}") { back ->
                 val id = back.arguments?.getString("id")?.toIntOrNull() ?: 0
