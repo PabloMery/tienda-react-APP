@@ -14,3 +14,14 @@ data class Product(
 )
 @Serializable
 data class CartItem(val id: Int, val product: Product, val qty: Int)
+
+@Serializable
+data class User(
+    val id: Int,
+    val nombre: String,
+    val correo: String,
+    val contrasena: String,
+    val telefono: String? = null,
+    val region: String,
+    val comuna: String
+)
