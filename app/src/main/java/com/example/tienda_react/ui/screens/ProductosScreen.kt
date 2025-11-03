@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.example.tienda_react.data.FakeData
 import com.example.tienda_react.ui.components.ProductThumb
 import com.example.tienda_react.ui.theme.TiendaTheme
+import com.example.tienda_react.utils.asCLP
 import com.example.tienda_react.viewmodel.CartViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -85,7 +86,7 @@ fun ProductosScreen(
                         )
                         Column(Modifier.weight(1f)) {
                             Text(p.name, style = MaterialTheme.typography.titleMedium)
-                            Text("$${p.price}")
+                            Text("${p.price.asCLP()}")
                             Spacer(Modifier.height(8.dp))
 
                             var bump by remember { mutableStateOf(false) }
@@ -134,7 +135,7 @@ private fun ProductosScreenStatic() {
                         )
                         Column(Modifier.weight(1f)) {
                             Text(p.name, style = MaterialTheme.typography.titleMedium)
-                            Text("$${p.price}")
+                            Text("${p.price}")
                             Spacer(Modifier.height(8.dp))
                             Button(onClick = { }) { Text("Añadir al carrito") }
                         }
