@@ -13,7 +13,10 @@ data class Product(
     val images: List<String> = emptyList()
 )
 @Serializable
-data class CartItem(val id: Int, val product: Product, val qty: Int)
+data class CartItem(
+    val id: Int,
+    val product: Product,
+    val qty: Int)
 
 @Serializable
 data class User(

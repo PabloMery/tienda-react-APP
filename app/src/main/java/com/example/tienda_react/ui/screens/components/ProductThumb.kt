@@ -12,11 +12,7 @@ import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 
-/**
- * Muestra la PRIMERA imagen disponible de una lista (assets).
- * - Acepta rutas tipo: file:///android_asset/IMG/Monopatines/mono2a.jpg
- * - Muestra loader mientras carga y contenido “cover” al terminar.
- */
+
 @Composable
 fun ProductThumb(
     urls: List<String>,
@@ -25,7 +21,6 @@ fun ProductThumb(
 ) {
     val model = urls.firstOrNull()
 
-    // Subcompose para manejar estados (loading/error) bonito
     SubcomposeAsyncImage(
         model = model,
         contentDescription = null,
@@ -39,11 +34,10 @@ fun ProductThumb(
                 }
             }
             is AsyncImagePainter.State.Error -> {
-                // Si quieres, aquí puedes poner un placeholder local (drawable)
-                // AsyncImage(model = R.drawable.placeholder, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = contentScale)
-                Box(Modifier.fillMaxSize()) { /* vacío o placeholder */ }
+
+                Box(Modifier.fillMaxSize()) {  }
             }
-            else -> SubcomposeAsyncImageContent() // pinta la imagen cargada
+            else -> SubcomposeAsyncImageContent()
         }
     }
 }

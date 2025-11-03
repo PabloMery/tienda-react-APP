@@ -45,7 +45,6 @@ fun AppNav() {
     val currentRoute = backEntry?.destination?.route?.substringBefore("/")
     val ui = cartVm.ui.collectAsState().value
 
-    // 👇 Barra inferior con Blog y Quiénes Somos
     val items = listOf(
         Route.Home,
         Route.Productos,
@@ -72,7 +71,6 @@ fun AppNav() {
     }
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text(topTitle) }) },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -143,7 +141,6 @@ fun AppNav() {
                 )
             }
 
-            // ---------- PRODUCTOS ----------
             composable(Route.Productos.route) {
                 ProductosScreen(
                     onOpen = { id -> nav.navigate("detalle/$id") },
@@ -152,7 +149,6 @@ fun AppNav() {
                 )
             }
 
-            // ---------- BLOG ----------
             composable(Route.Blog.route) {
                 BlogScreen(
                     onOpenDetalle1 = { nav.navigate(Route.BlogDet1.route) },
@@ -160,7 +156,6 @@ fun AppNav() {
                 )
             }
 
-            // ---------- DETALLES BLOG ----------
             composable(Route.BlogDet1.route) {
                 BlogDetalle1Screen(onBack = { nav.popBackStack() })
             }
@@ -168,12 +163,10 @@ fun AppNav() {
                 BlogDetalle2Screen(onBack = { nav.popBackStack() })
             }
 
-            // ---------- QUIÉNES SOMOS ----------
             composable(Route.QuienesSomos.route) {
                 QuienesSomosScreen()
             }
 
-            // ---------- DETALLE PRODUCTO ----------
             composable("detalle/{id}") { back ->
                 val id = back.arguments?.getString("id")?.toIntOrNull() ?: 0
                 DetalleScreen(
@@ -183,12 +176,10 @@ fun AppNav() {
                 )
             }
 
-            // ---------- CARRITO ----------
             composable(Route.Carrito.route) {
                 CarritoScreen(cartVm = cartVm)
             }
 
-            // ---------- DEBUG ----------
             composable(Route.DebugAssets.route) {
                 com.example.tienda_react.ui.debug.DebugAssetsScreen(baseDir = "IMG")
             }

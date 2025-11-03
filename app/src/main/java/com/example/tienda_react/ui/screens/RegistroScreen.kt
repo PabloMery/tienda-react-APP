@@ -27,7 +27,6 @@ fun RegistroScreen(
     var region by remember { mutableStateOf("") }
     var comuna by remember { mutableStateOf("") }
 
-    // Ejemplo mínimo; reemplaza por tu lista real si ya la tienes
     val comunasPorRegion = remember {
         mapOf(
             "Metropolitana de Santiago" to listOf("Santiago", "Puente Alto", "Maipú"),

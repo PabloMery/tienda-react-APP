@@ -142,7 +142,7 @@ fun IntegrantesRow() {
         verticalAlignment = Alignment.Top
     ) {
         IntegranteCard(
-            imagen = R.drawable.pablo_mery1,     // ← sin extensión
+            imagen = R.drawable.pablo_mery1,
             nombre = "Pablo Mery",
             descripcion = "Director general\nSocio y Fundador\nTangana"
         )
