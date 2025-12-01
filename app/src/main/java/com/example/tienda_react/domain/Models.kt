@@ -35,3 +35,22 @@ data class User(
     val region: String,
     val comuna: String
 )
+@Serializable
+data class CartItemRequest(
+    val productId: Long,
+    val quantity: Int
+)
+
+@Serializable
+data class CartResponse(
+    val id: Long,
+    val userId: Long,
+    val status: String,
+    val items: List<CartItemResponse>
+)
+
+@Serializable
+data class CartItemResponse(
+    val productId: Long,
+    val quantity: Int
+)

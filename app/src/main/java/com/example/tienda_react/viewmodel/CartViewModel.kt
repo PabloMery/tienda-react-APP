@@ -1,12 +1,16 @@
-
 package com.example.tienda_react.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.tienda_react.data.cart.CartStore
+import com.example.tienda_react.data.FakeData
+import com.example.tienda_react.data.users.UserRepository
 import com.example.tienda_react.domain.CartItem
+import com.example.tienda_react.domain.CartItemRequest
+import com.example.tienda_react.domain.CartResponse
 import com.example.tienda_react.domain.Product
+import com.example.tienda_react.network.CartRetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -19,66 +23,163 @@ data class CartUiState(
     val couponCode: String? = null,
     val discount: Int = 0,
     val couponError: String? = null,
-    val totalAfterDiscount: Int = 0
+    val totalAfterDiscount: Int = 0,
+    val error: String? = null
 )
 
 class CartViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val store = CartStore(app)
-
     private val _ui = MutableStateFlow(CartUiState())
     val ui: StateFlow<CartUiState> = _ui
 
+    // Obtenemos el ID del usuario logueado desde la sesión local.
+    // Si es null (invitado), algunas funciones no harán nada.
+    private val currentUserId: Long?
+        get() = UserRepository.SessionManager.currentUser?.id
+
     init {
-        viewModelScope.launch {
-            val loaded = store.read()
-            _ui.value = calc(loaded)
+        // Al iniciar la pantalla, intentamos traer el carrito del servidor
+        fetchCart()
+    }
+
+    /**
+     * Obtiene el carrito del servidor (GET /api/cart)
+     */
+    fun fetchCart() = viewModelScope.launch {
+        val userId = currentUserId ?: return@launch
+        try {
+            val response = CartRetrofitClient.api.getCart(userId)
+            if (response.isSuccessful && response.body() != null) {
+                updateUiFromResponse(response.body()!!)
+            } else {
+                Log.e("CartViewModel", "Error fetchCart: ${response.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Excepción fetchCart", e)
         }
     }
 
-    /** Añadir 1 unidad del producto al carrito */
+    /**
+     * Agrega un producto al carrito (POST /api/cart/items)
+     * Siempre enviamos quantity=1 para que el backend sume.
+     */
     fun add(p: Product) = viewModelScope.launch {
-        val cur = _ui.value.items
-        val ex = cur.find { it.id == p.id }
-        val newItems =
-            if (ex == null) cur + CartItem(p.id, p, 1)
-            else cur.map { if (it.id == p.id) it.copy(qty = it.qty + 1) else it }
-        persist(newItems)
+        val userId = currentUserId
+        if (userId == null) {
+            // Manejo básico para usuario invitado (opcional: podrías mostrar un error)
+            Log.w("CartViewModel", "Usuario no logueado, no se puede agregar al carrito remoto.")
+            return@launch
+        }
+
+        try {
+            val request = CartItemRequest(productId = p.id.toLong(), quantity = 1)
+            val response = CartRetrofitClient.api.addItem(userId, request)
+
+            if (response.isSuccessful && response.body() != null) {
+                updateUiFromResponse(response.body()!!)
+            } else {
+                Log.e("CartViewModel", "Error add: ${response.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Excepción add", e)
+        }
     }
 
-    /** Fijar cantidad (si llega 0, se elimina) */
-    fun setQty(id: Int, qty: Int) = viewModelScope.launch {
-        val newItems = _ui.value.items
-            .map { if (it.id == id) it.copy(qty = qty.coerceAtLeast(0)) else it }
-            .filter { it.qty > 0 }
-        persist(newItems)
+    /**
+     * Actualiza la cantidad de un ítem.
+     * Si qty <= 0, lo eliminamos.
+     */
+    fun setQty(productId: Int, newQty: Int) = viewModelScope.launch {
+        val userId = currentUserId ?: return@launch
+
+        try {
+            if (newQty <= 0) {
+                // Si la cantidad es 0 o menor, llamamos al endpoint DELETE
+                remove(productId)
+            } else {
+                // Si es mayor a 0, llamamos al endpoint PUT (actualizar cantidad absoluta)
+                val request = CartItemRequest(productId = productId.toLong(), quantity = newQty)
+                val response = CartRetrofitClient.api.updateItem(userId, request)
+
+                if (response.isSuccessful && response.body() != null) {
+                    updateUiFromResponse(response.body()!!)
+                } else {
+                    Log.e("CartViewModel", "Error setQty: ${response.code()}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Excepción setQty", e)
+        }
     }
 
-    /** Eliminar ítem del carrito */
-    fun remove(id: Int) = viewModelScope.launch {
-        val newItems = _ui.value.items.filter { it.id != id }
-        persist(newItems)
+    /**
+     * Elimina un ítem del carrito (DELETE /api/cart/items/{id})
+     */
+    fun remove(productId: Int) = viewModelScope.launch {
+        val userId = currentUserId ?: return@launch
+        try {
+            val response = CartRetrofitClient.api.removeItem(userId, productId.toLong())
+            if (response.isSuccessful && response.body() != null) {
+                updateUiFromResponse(response.body()!!)
+            } else {
+                Log.e("CartViewModel", "Error remove: ${response.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Excepción remove", e)
+        }
     }
 
-    /** Guardar en DataStore y actualizar UI */
-    private suspend fun persist(items: List<CartItem>) {
-        store.write(items)
-        _ui.value = calc(items, _ui.value.couponCode)
+    /**
+     * Vacía el carrito completo (DELETE /api/cart)
+     */
+    fun clearCart() = viewModelScope.launch {
+        val userId = currentUserId ?: return@launch
+        try {
+            val response = CartRetrofitClient.api.clearCart(userId)
+            if (response.isSuccessful && response.body() != null) {
+                updateUiFromResponse(response.body()!!)
+            } else {
+                Log.e("CartViewModel", "Error clearCart: ${response.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Excepción clearCart", e)
+        }
     }
 
-    /** Recalcular totales + cupones */
-    private fun calc(items: List<CartItem>, coupon: String? = null): CartUiState {
-        val totalItems = items.sumOf { it.qty }
-        val totalPrice = items.sumOf { it.qty * it.product.price }
+    /**
+     * Convierte la respuesta del servidor (IDs y cantidades) en objetos completos
+     * para la UI (con Nombre, Precio e Imagenes desde FakeData).
+     */
+    private fun updateUiFromResponse(cartResponse: CartResponse) {
+        // Mapeamos cada item que viene del servidor
+        val mappedItems = cartResponse.items.mapNotNull { itemResp ->
+            // Buscamos los detalles visuales en nuestra data local (FakeData)
+            val localProduct = FakeData.PRODUCTS.find { it.id == itemResp.productId.toInt() }
 
-        val (discount, err) = computeDiscount(totalPrice, coupon)
+            if (localProduct != null) {
+                CartItem(
+                    id = itemResp.productId.toInt(),
+                    product = localProduct,
+                    qty = itemResp.quantity
+                )
+            } else {
+                // Si el producto no existe en la app (FakeData), lo ignoramos
+                null
+            }
+        }
+
+        // Recalculamos totales basados en los items mapeados
+        val totalItems = mappedItems.sumOf { it.qty }
+        val totalPrice = mappedItems.sumOf { it.qty * it.product.price }
+
+        // Mantenemos la lógica de cupones actual (visual) sobre el nuevo subtotal
+        val (discount, err) = computeDiscount(totalPrice, _ui.value.couponCode)
         val totalAfter = (totalPrice - discount).coerceAtLeast(0)
 
-        return CartUiState(
-            items = items,
+        _ui.value = _ui.value.copy(
+            items = mappedItems,
             totalItems = totalItems,
             totalPrice = totalPrice,
-            couponCode = coupon,
             discount = discount,
             couponError = err,
             totalAfterDiscount = totalAfter
@@ -86,8 +187,11 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------------------
-    // 💸 Lógica de cupones
+    // 💸 Lógica de cupones (Local)
     // ---------------------------
+    // Esta lógica se mantiene localmente para efectos visuales, ya que el backend
+    // aún no procesa cupones. Se aplica sobre el total calculado.
+
     private val percentCoupons = mapOf(
         "SAVE10" to 10,
         "SAVE20" to 20

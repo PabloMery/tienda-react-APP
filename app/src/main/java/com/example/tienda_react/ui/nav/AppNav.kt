@@ -97,12 +97,15 @@ fun AppNav() {
             startDestination = Route.Login.route,
             modifier = Modifier.padding(pad)
         ) {
-            // ---------- Auth ----------
+// ---------- Auth ----------
             composable(Route.Login.route) {
                 LoginScreen(
                     onGoRegistro = { nav.navigate(Route.Registro.route) },
                     onLoginOk = {
-                        // Ir a Home y remover Login del backstack
+                        // 1. IMPORTANTE: Recargar el carrito del servidor para el usuario que acaba de entrar
+                        cartVm.fetchCart()
+
+                        // 2. Navegar al Home
                         nav.navigate(Route.Home.route) {
                             popUpTo(Route.Login.route) { inclusive = true }
                             launchSingleTop = true
