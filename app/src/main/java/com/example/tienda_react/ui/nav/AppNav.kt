@@ -15,53 +15,29 @@ import com.example.tienda_react.ui.screens.*
 import com.example.tienda_react.viewmodel.CartViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 
-
-
 private sealed class Route(val route: String, val label: String, val icon: String) {
-    // Tabs inferiores
-    data object Home         : Route("home",        "Inicio",   "🏠")
-    data object Productos    : Route("productos",   "Productos","🛒")
-    data object Blog         : Route("blog",        "Blog",     "📰")
-    data object QuienesSomos : Route("quienes",     "Nosotros", "👥")
-    data object Carrito      : Route("carrito",     "Carrito",  "🧺")
-    data object DebugAssets  : Route("debug-assets","Debug",    "🧪")
+    data object Home       : Route("home",      "Inicio",    "🏠")
+    data object Productos  : Route("productos", "Productos", "🛒")
+    data object Carrito    : Route("carrito",   "Carrito",   "🧺")
+    data object DebugAssets : Route("debug-assets", "Debug", "🧪")
 
+    data object Login       : Route("login",        "Iniciar sesión", "")
+    data object Registro    : Route("registro",     "Registro",        "")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNav() {
     val nav = rememberNavController()
+
+    // 1 sola instancia para toda la app
     val cartVm: CartViewModel = viewModel()
 
     val backEntry by nav.currentBackStackEntryAsState()
     val currentRoute = backEntry?.destination?.route?.substringBefore("/")
     val ui = cartVm.ui.collectAsState().value
 
-    val items = listOf(
-        Route.Home,
-        Route.Productos,
-        Route.Blog,
-        Route.QuienesSomos,
-        Route.Carrito
-    )
-
-    val showBottomBar = when (currentRoute) {
-        Route.Login.route, Route.Registro.route -> false
-        else -> true
-    }
-
-    val topTitle = when (currentRoute) {
-        Route.Login.route        -> "Iniciar sesión"
-        Route.Registro.route     -> "Registro"
-        Route.Home.route         -> "TiendaReact"
-        Route.Productos.route    -> "Productos"
-        Route.Blog.route         -> "Blog"
-        Route.QuienesSomos.route -> "Quiénes somos"
-        Route.Carrito.route      -> "Carrito (${ui.totalItems})"
-        Route.DebugAssets.route  -> "Debug assets"
-        else                     -> "TiendaReact"
-    }
+    val items = listOf(Route.Home, Route.Productos, Route.Carrito)
 
     val showBottomBar = when (currentRoute) {
         Route.Login.route, Route.Registro.route -> false
@@ -78,21 +54,7 @@ fun AppNav() {
         else                    -> "TiendaReact"
     }
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        when (currentRoute) {
-                            Route.Home.route      -> "TiendaReact"
-                            Route.Productos.route -> "Productos"
-                            Route.Carrito.route   -> "Carrito (${ui.totalItems})"
-                            Route.DebugAssets.route-> "Debug assets"
-                            else                  -> "TiendaReact"
-                        }
-                    )
-                }
-            )
-        },
+        topBar = { CenterAlignedTopAppBar(title = { Text(topTitle) }) },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -131,22 +93,43 @@ fun AppNav() {
     ) { pad ->
         NavHost(
             navController = nav,
-            startDestination = Route.Home.route,//Route.DebugAssets.route
+            // ⬇️ Cambiado a Login para que parta en autenticación
+            startDestination = Route.Login.route,
             modifier = Modifier.padding(pad)
         ) {
+            // ---------- Auth ----------
+            composable(Route.Login.route) {
+                LoginScreen(
+                    onGoRegistro = { nav.navigate(Route.Registro.route) },
+                    onLoginOk = {
+                        // Ir a Home y remover Login del backstack
+                        nav.navigate(Route.Home.route) {
+                            popUpTo(Route.Login.route) { inclusive = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+            composable(Route.Registro.route) {
+                RegistroScreen(
+                    onBackLogin = { nav.popBackStack() },
+                    onRegistroOk = { nav.popBackStack() } // vuelve a Login
+                )
+            }
+
+            // ---------- Tabs ----------
             composable(Route.Home.route) {
                 HomeScreen(
                     onGo = { nav.navigate(Route.Productos.route) },
                     onDebug = { nav.navigate(Route.DebugAssets.route) }
                 )
             }
-
             composable(Route.Productos.route) {
                 ProductosScreen(
                     onOpen = { id -> nav.navigate("detalle/$id") },
                     onGoCart = { nav.navigate(Route.Carrito.route) },
                     cartVm = cartVm
-
                 )
             }
             composable("detalle/{id}") { back ->
@@ -157,11 +140,9 @@ fun AppNav() {
                     cartVm = cartVm
                 )
             }
-
             composable(Route.Carrito.route) {
                 CarritoScreen(cartVm = cartVm)
             }
-
             composable(Route.DebugAssets.route) {
                 com.example.tienda_react.ui.debug.DebugAssetsScreen(baseDir = "IMG")
             }
