@@ -19,7 +19,7 @@ private const val TAG = "DebugAssets"
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DebugAssetsScreen(
-    baseDir: String = "IMG" // cambia a "IMG/Monopatines" para filtrar subcarpeta
+    baseDir: String = "IMG"
 ) {
     val ctx = LocalContext.current
     var files by remember { mutableStateOf<List<String>>(emptyList()) }

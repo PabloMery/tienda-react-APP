@@ -1,80 +1,88 @@
 package com.example.tienda_react.data.users
 
-import android.util.Log
+import androidx.compose.runtime.mutableStateListOf
 import com.example.tienda_react.domain.User
-import com.example.tienda_react.network.LoginRequestDto
-import com.example.tienda_react.network.RetrofitClient
+import kotlinx.coroutines.delay
 
+/**
+ * Repositorio en memoria para la actividad (sin DB).
+ * - register(): valida duplicados por correo
+ * - login(): valida credenciales exactas
+ * - seed(): opcional, para crear 1 usuario de prueba
+ */
 object UserRepository {
+
+    private val users = mutableStateListOf<User>()
+    private var nextId = 1
+
+    init {
+        // Opcional: un usuario semilla para probar login rápido
+        // seed("Alumno DUOC", "demo@duoc.cl", "123456")
+    }
 
     object SessionManager {
         var currentUser: User? = null
     }
-
-    // Validación local del correo
     fun isEmailAllowed(email: String): Boolean {
-        val rx = Regex("^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$")
+        // Acepta duoc.cl, profesor.duoc.cl y gmail.com
+        val rx = Regex("^[^\\s@]+@(duoc\\.cl|profesor\\.duoc\\.cl|gmail\\.com)$", RegexOption.IGNORE_CASE)
         return rx.matches(email.trim())
     }
 
-    // --- LOGIN ---
-    suspend fun login(email: String, pass: String): Result<User> {
-        return try {
-            val request = LoginRequestDto(correo = email, pass = pass)
-            val response = RetrofitClient.api.login(request)
+    fun emailExists(email: String): Boolean =
+        users.any { it.correo.equals(email.trim(), ignoreCase = true) }
 
-            if (response.isSuccessful && response.body() != null) {
-                val user = response.body()!!
-                SessionManager.currentUser = user
-                Result.success(user)
-            } else {
-                Log.e("ERROR_API", "Fallo Login: ${response.code()}")
-                Result.failure(Exception("Credenciales inválidas"))
-            }
-        } catch (e: Exception) {
-            Log.e("ERROR_API", "Excepción Login", e)
-            Result.failure(Exception("Error de conexión con el servidor"))
-        }
-    }
-
-    // --- REGISTRO ---
     suspend fun register(
-        nombre: String, correo: String, contrasena: String,
-        telefono: String?, region: String, comuna: String
+        nombre: String,
+        correo: String,
+        contrasena: String,
+        telefono: String?,
+        region: String,
+        comuna: String
     ): Result<Unit> {
+        // Simulamos latencia de red (opcional)
+        delay(300)
 
-        // CORRECCIÓN AQUÍ:
-        // Asignamos id = null para que Hibernate (Java) sepa que es un INSERT nuevo
-        val userToSend = User(
-            id = null,
-            nombre = nombre,
-            correo = correo,
-            contrasena = contrasena,
-            telefono = telefono,
+        if (!isEmailAllowed(correo)) {
+            return Result.failure(IllegalArgumentException("Correo no permitido"))
+        }
+        if (emailExists(correo)) {
+            return Result.failure(IllegalArgumentException("El correo ya está registrado"))
+        }
+        val user = User(
+            id = nextId++,
+            nombre = nombre.trim(),
+            correo = correo.trim(),
+            contrasena = contrasena, // Para la actividad no encriptamos
+            telefono = telefono?.ifBlank { null },
             region = region,
             comuna = comuna
         )
+        users += user
+        return Result.success(Unit)
+    }
 
-        Log.d("DEBUG_API", "Enviando usuario nuevo: $userToSend")
+    suspend fun login(email: String, password: String): Result<User> {
+        delay(200)
+        val u = users.firstOrNull {
+            it.correo.equals(email.trim(), ignoreCase = true) && it.contrasena == password
+        } ?: return Result.failure(IllegalArgumentException("Credenciales inválidas"))
+        SessionManager.currentUser = u
+        return Result.success(u)
+    }
 
-        return try {
-            val response = RetrofitClient.api.register(userToSend)
-
-            if (response.isSuccessful) {
-                Result.success(Unit)
-            } else {
-                val errorBody = response.errorBody()?.string()
-                Log.e("ERROR_API", "Fallo Registro. Código: ${response.code()} Body: $errorBody")
-
-                if (response.code() == 409) {
-                    Result.failure(Exception("El correo ya está registrado"))
-                } else {
-                    Result.failure(Exception("Error del servidor: ${response.code()}"))
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ERROR_API", "Excepción Registro", e)
-            Result.failure(Exception("No se pudo conectar al servidor"))
+    // Utilidad opcional para pruebas manuales
+    fun seed(nombre: String, correo: String, pass: String) {
+        if (!emailExists(correo)) {
+            users += User(
+                id = nextId++,
+                nombre = nombre,
+                correo = correo,
+                contrasena = pass,
+                telefono = null,
+                region = "Metropolitana de Santiago",
+                comuna = "Santiago"
+            )
         }
     }
 }

@@ -5,20 +5,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.tienda_react.utils.asCLP
 import com.example.tienda_react.utils.ellipsize
 import com.example.tienda_react.viewmodel.CartViewModel
-import com.example.tienda_react.utils.asCLP
-import com.example.tienda_react.utils.ellipsize
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CarritoScreen(cartVm: CartViewModel) {
     val ui = cartVm.ui.collectAsState().value
-    var couponInput  by remember(ui.couponCode) { mutableStateOf(ui.couponCode ?: "") }
+    var couponInput by remember(ui.couponCode) { mutableStateOf(ui.couponCode ?: "") }
+    var showDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Carrito (${ui.totalItems})") }) }
@@ -30,13 +30,17 @@ fun CarritoScreen(cartVm: CartViewModel) {
                 .fillMaxSize()
         ) {
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(ui.items, key = { it.id }) { row ->
                     ElevatedCard {
                         Row(
-                            Modifier.padding(12.dp).fillMaxWidth(),
+                            Modifier
+                                .padding(12.dp)
+                                .fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             val shortName = row.product.name.ellipsize(28)
@@ -63,7 +67,9 @@ fun CarritoScreen(cartVm: CartViewModel) {
 
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 OutlinedButton(
-                                    onClick = { cartVm.setQty(row.id, (row.qty - 1).coerceAtLeast(0)) }
+                                    onClick = {
+                                        cartVm.setQty(row.id, (row.qty - 1).coerceAtLeast(0))
+                                    }
                                 ) { Text("-") }
 
                                 Text("x${row.qty}", style = MaterialTheme.typography.titleMedium)
@@ -73,10 +79,12 @@ fun CarritoScreen(cartVm: CartViewModel) {
                                 ) { Text("+") }
                             }
 
-                            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                            Column(horizontalAlignment = Alignment.End) {
                                 val lineTotal = row.product.price * row.qty
                                 Text(lineTotal.asCLP(), style = MaterialTheme.typography.titleMedium)
-                                TextButton(onClick = { cartVm.remove(row.id) }) { Text("\uD83D\uDDD1") }
+                                TextButton(onClick = { cartVm.remove(row.id) }) {
+                                    Text("\uD83D\uDDD1") // 🗑
+                                }
                             }
                         }
                     }
@@ -85,7 +93,10 @@ fun CarritoScreen(cartVm: CartViewModel) {
 
             Spacer(Modifier.height(12.dp))
             Text("Cupón", style = MaterialTheme.typography.titleMedium)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 OutlinedTextField(
                     modifier = Modifier.weight(1f),
                     value = couponInput,
@@ -123,9 +134,24 @@ fun CarritoScreen(cartVm: CartViewModel) {
             Spacer(Modifier.height(12.dp))
             Button(
                 enabled = ui.totalItems > 0,
-                onClick = { /* TODO: checkout */ },
+                onClick = { showDialog = true },
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Pagar") }
+            ) {
+                Text("Pagar")
+            }
+
+            if (showDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDialog = false },
+                    confirmButton = {
+                        TextButton(onClick = { showDialog = false }) {
+                            Text("OK")
+                        }
+                    },
+                    title = { Text("Redireccionando...") },
+                    text = { Text("Por favor espera mientras procesamos tu pago.") }
+                )
+            }
         }
     }
 }
