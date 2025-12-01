@@ -21,6 +21,8 @@ private sealed class Route(val route: String, val label: String, val icon: Strin
     data object Carrito    : Route("carrito",   "Carrito",   "🧺")
     data object DebugAssets : Route("debug-assets", "Debug", "🧪")
 
+    data object Login       : Route("login",        "Iniciar sesión", "")
+    data object Registro    : Route("registro",     "Registro",        "")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,68 +39,89 @@ fun AppNav() {
 
     val items = listOf(Route.Home, Route.Productos, Route.Carrito)
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        when (currentRoute) {
-                            Route.Home.route      -> "TiendaReact"
-                            Route.Productos.route -> "Productos"
-                            Route.Carrito.route   -> "Carrito (${ui.totalItems})"
-                            Route.DebugAssets.route-> "Debug assets"
-                            else                  -> "TiendaReact"
-                        }
-                    )
-                }
-            )
-        },
-        bottomBar = {
-            NavigationBar {
-                items.forEach { item ->
-                    val selected = currentRoute == item.route
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            // si ya estoy en ese tab, no hago nada
-                            if (selected) return@NavigationBarItem
+    val showBottomBar = when (currentRoute) {
+        Route.Login.route, Route.Registro.route -> false
+        else -> true
+    }
 
-                            // 1) intenta volver a una instancia existente en el back stack
-                            val popped = nav.popBackStack(item.route, inclusive = false)
-                            if (!popped) {
-                                // 2) si no existe, navega creando/recuperando el estado
-                                nav.navigate(item.route) {
-                                    popUpTo(nav.graph.findStartDestination().id) {
-                                        saveState = true
+    val topTitle = when (currentRoute) {
+        Route.Login.route       -> "Iniciar sesión"
+        Route.Registro.route    -> "Registro"
+        Route.Home.route        -> "TiendaReact"
+        Route.Productos.route   -> "Productos"
+        Route.Carrito.route     -> "Carrito (${ui.totalItems})"
+        Route.DebugAssets.route -> "Debug assets"
+        else                    -> "TiendaReact"
+    }
+    Scaffold(
+        topBar = { CenterAlignedTopAppBar(title = { Text(topTitle) }) },
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar {
+                    items.forEach { item ->
+                        val selected = currentRoute == item.route
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                if (selected) return@NavigationBarItem
+                                val popped = nav.popBackStack(item.route, inclusive = false)
+                                if (!popped) {
+                                    nav.navigate(item.route) {
+                                        popUpTo(nav.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
-                            }
-                        },
-                        icon = {
-                            if (item is Route.Carrito && ui.totalItems > 0) {
-                                BadgedBox(badge = { Badge { Text("${ui.totalItems}") } }) {
+                            },
+                            icon = {
+                                if (item is Route.Carrito && ui.totalItems > 0) {
+                                    BadgedBox(badge = { Badge { Text("${ui.totalItems}") } }) {
+                                        Text(item.icon)
+                                    }
+                                } else {
                                     Text(item.icon)
                                 }
-                            } else {
-                                Text(item.icon)
-                            }
-                        },
-                        label = { Text(item.label) }
-                    )
+                            },
+                            label = { Text(item.label) }
+                        )
+                    }
                 }
             }
         }
     ) { pad ->
         NavHost(
             navController = nav,
-            startDestination = Route.Home.route,//Route.DebugAssets.route
+            // ⬇️ Cambiado a Login para que parta en autenticación
+            startDestination = Route.Login.route,
             modifier = Modifier.padding(pad)
         ) {
+            // ---------- Auth ----------
+            composable(Route.Login.route) {
+                LoginScreen(
+                    onGoRegistro = { nav.navigate(Route.Registro.route) },
+                    onLoginOk = {
+                        // Ir a Home y remover Login del backstack
+                        nav.navigate(Route.Home.route) {
+                            popUpTo(Route.Login.route) { inclusive = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+            composable(Route.Registro.route) {
+                RegistroScreen(
+                    onBackLogin = { nav.popBackStack() },
+                    onRegistroOk = { nav.popBackStack() } // vuelve a Login
+                )
+            }
+
+            // ---------- Tabs ----------
             composable(Route.Home.route) {
                 HomeScreen(
-                    onGo = { nav.navigate(Route.Productos.route) } ,
+                    onGo = { nav.navigate(Route.Productos.route) },
                     onDebug = { nav.navigate(Route.DebugAssets.route) }
                 )
             }
@@ -107,7 +130,6 @@ fun AppNav() {
                     onOpen = { id -> nav.navigate("detalle/$id") },
                     onGoCart = { nav.navigate(Route.Carrito.route) },
                     cartVm = cartVm
-
                 )
             }
             composable("detalle/{id}") { back ->
@@ -122,7 +144,6 @@ fun AppNav() {
                 CarritoScreen(cartVm = cartVm)
             }
             composable(Route.DebugAssets.route) {
-                // Puedes pasar "IMG" o directamente "IMG/Monopatines"
                 com.example.tienda_react.ui.debug.DebugAssetsScreen(baseDir = "IMG")
             }
         }
