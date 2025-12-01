@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.tienda_react.data.users.UserRepository
+import com.example.tienda_react.utils.ChileData
 import kotlinx.coroutines.launch
 
 @Composable
@@ -24,18 +25,21 @@ fun RegistroScreen(
     var pass by remember { mutableStateOf("") }
     var confirmar by remember { mutableStateOf("") }
     var telefono by remember { mutableStateOf("") }
+
+    // ESTADOS PARA DROPDOWNS
     var region by remember { mutableStateOf("") }
     var comuna by remember { mutableStateOf("") }
 
-    // Ejemplo mínimo; reemplaza por tu lista real si ya la tienes
-    val comunasPorRegion = remember {
-        mapOf(
-            "Metropolitana de Santiago" to listOf("Santiago", "Puente Alto", "Maipú"),
-            "Valparaíso" to listOf("Valparaíso", "Viña del Mar")
-        )
+    // 1. OBTENER DATOS
+    val mapRegiones = ChileData.regionesYComunas
+
+    // 2. LISTA DE REGIONES
+    val listaRegiones = remember { mapRegiones.keys.toList() }
+
+    // 3. LISTA DE COMUNAS
+    val listaComunas = remember(region) {
+        mapRegiones[region] ?: emptyList()
     }
-    val regiones = comunasPorRegion.keys.sorted()
-    val comunas = comunasPorRegion[region].orEmpty()
 
     var showRegiones by remember { mutableStateOf(false) }
     var showComunas by remember { mutableStateOf(false) }
@@ -60,45 +64,89 @@ fun RegistroScreen(
         ) {
             OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre / Razón comercial") }, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
-            OutlinedTextField(correo, { correo = it }, label = { Text("Correo (duoc.cl / profesor.duoc.cl / gmail.com)") }, modifier = Modifier.fillMaxWidth())
+
+            OutlinedTextField(correo, { correo = it }, label = { Text("Correo") }, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
+
             OutlinedTextField(pass, { pass = it }, label = { Text("Contraseña") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
+
             OutlinedTextField(confirmar, { confirmar = it }, label = { Text("Confirmar contraseña") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
+
             OutlinedTextField(telefono, { telefono = it }, label = { Text("Teléfono (opcional)") }, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
 
-            // Región
-            ExposedDropdownMenuBox(expanded = showRegiones, onExpandedChange = { showRegiones = !showRegiones }) {
+            // --- DROPDOWN REGIÓN ---
+            ExposedDropdownMenuBox(
+                expanded = showRegiones,
+                onExpandedChange = { showRegiones = !showRegiones }
+            ) {
                 OutlinedTextField(
-                    value = region, onValueChange = {},
-                    readOnly = true, label = { Text("Región") },
-                    modifier = Modifier.menuAnchor().fillMaxWidth().clickable { showRegiones = true }
+                    value = region,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Región") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showRegiones) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
                 )
-                ExposedDropdownMenu(expanded = showRegiones, onDismissRequest = { showRegiones = false }) {
-                    regiones.forEach {
-                        DropdownMenuItem(text = { Text(it) }, onClick = {
-                            region = it; comuna = ""; showRegiones = false
-                        })
+
+                // AQUÍ AGREGAMOS EL MODIFIER.HEIGHTIN
+                ExposedDropdownMenu(
+                    expanded = showRegiones,
+                    onDismissRequest = { showRegiones = false },
+                    modifier = Modifier.heightIn(max = 250.dp) // <--- ESTO ACTIVA EL SCROLL
+                ) {
+                    listaRegiones.forEach { reg ->
+                        DropdownMenuItem(
+                            text = { Text(reg) },
+                            onClick = {
+                                region = reg
+                                comuna = ""
+                                showRegiones = false
+                            }
+                        )
                     }
                 }
             }
             Spacer(Modifier.height(10.dp))
 
-            // Comuna
-            ExposedDropdownMenuBox(expanded = showComunas, onExpandedChange = { showComunas = !showComunas }) {
+            // --- DROPDOWN COMUNA ---
+            ExposedDropdownMenuBox(
+                expanded = showComunas,
+                onExpandedChange = {
+                    if (region.isNotBlank()) showComunas = !showComunas
+                }
+            ) {
                 OutlinedTextField(
-                    value = comuna, onValueChange = {},
-                    readOnly = true, label = { Text("Comuna") },
-                    modifier = Modifier.menuAnchor().fillMaxWidth().clickable { if (region.isNotBlank()) showComunas = true }
+                    value = comuna,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Comuna") },
+                    placeholder = { Text("Selecciona región primero") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showComunas) },
+                    enabled = region.isNotBlank(),
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
                 )
-                ExposedDropdownMenu(expanded = showComunas, onDismissRequest = { showComunas = false }) {
-                    comunas.forEach {
-                        DropdownMenuItem(text = { Text(it) }, onClick = { comuna = it; showComunas = false })
+
+                // AQUÍ AGREGAMOS EL MODIFIER.HEIGHTIN TAMBIÉN
+                ExposedDropdownMenu(
+                    expanded = showComunas,
+                    onDismissRequest = { showComunas = false },
+                    modifier = Modifier.heightIn(max = 250.dp) // <--- ESTO ACTIVA EL SCROLL
+                ) {
+                    listaComunas.forEach { com ->
+                        DropdownMenuItem(
+                            text = { Text(com) },
+                            onClick = {
+                                comuna = com
+                                showComunas = false
+                            }
+                        )
                     }
                 }
             }
+
             Spacer(Modifier.height(16.dp))
 
             Button(
@@ -138,4 +186,3 @@ fun RegistroScreen(
         }
     }
 }
-
