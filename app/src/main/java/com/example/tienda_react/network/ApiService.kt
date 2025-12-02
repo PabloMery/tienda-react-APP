@@ -40,22 +40,22 @@ interface ApiService {
     // MICROSERVICIO CARRITO (8082)
     // ============================
     @GET("api/cart")
-    suspend fun getCart(@Header("X-User-Id") userId: Long): Response<CartResponse>
+    suspend fun getCart(@Header("X-User-Id") userId: Long): Response<CartResponseBackend>
 
     @POST("api/cart/items")
     suspend fun addItemToCart(
         @Header("X-User-Id") userId: Long,
         @Body item: CartItemRequest
-    ): Response<CartResponse>
+    ): Response<CartResponseBackend>
 
     @DELETE("api/cart/items/{productId}")
     suspend fun removeItemFromCart(
         @Header("X-User-Id") userId: Long,
         @Path("productId") productId: Long
-    ): Response<CartResponse>
+    ): Response<CartResponseBackend>
 
     @DELETE("api/cart")
-    suspend fun clearCart(@Header("X-User-Id") userId: Long): Response<CartResponse>
+    suspend fun clearCart(@Header("X-User-Id") userId: Long): Response<CartResponseBackend>
 }
 
 // DTO para Login

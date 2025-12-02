@@ -1,7 +1,7 @@
 package com.example.tienda_react.network
 
 import com.example.tienda_react.domain.CartItemRequest
-import com.example.tienda_react.domain.CartResponse
+import com.example.tienda_react.domain.CartResponseBackend
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -9,33 +9,32 @@ import retrofit2.http.*
 
 interface CartApiService {
     @GET("api/cart")
-    suspend fun getCart(@Header("X-User-Id") userId: Long): Response<CartResponse>
+    suspend fun getCart(@Header("X-User-Id") userId: Long): Response<CartResponseBackend>
 
     @POST("api/cart/items")
     suspend fun addItem(
         @Header("X-User-Id") userId: Long,
         @Body item: CartItemRequest
-    ): Response<CartResponse>
+    ): Response<CartResponseBackend>
 
     @PUT("api/cart/items")
     suspend fun updateItem(
         @Header("X-User-Id") userId: Long,
         @Body item: CartItemRequest
-    ): Response<CartResponse>
+    ): Response<CartResponseBackend>
 
     @DELETE("api/cart/items/{productId}")
     suspend fun removeItem(
         @Header("X-User-Id") userId: Long,
         @Path("productId") productId: Long
-    ): Response<CartResponse>
+    ): Response<CartResponseBackend>
 
     @DELETE("api/cart")
-    suspend fun clearCart(@Header("X-User-Id") userId: Long): Response<CartResponse>
+    suspend fun clearCart(@Header("X-User-Id") userId: Long): Response<CartResponseBackend>
 }
 
-// 2. El objeto Cliente exclusivo para el puerto 8082
+// Cliente exclusivo para el puerto 8082
 object CartRetrofitClient {
-    // Apuntamos SOLO este cliente a tu microservicio
     private const val BASE_URL = "http://10.0.2.2:8082/"
 
     val api: CartApiService by lazy {
