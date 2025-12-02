@@ -39,37 +39,52 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
         val userId = UserRepository.SessionManager.getUserId()
         viewModelScope.launch {
             _ui.value = _ui.value.copy(isLoading = true)
-            val result = CartRepository.getCart(userId)
+            try {
+                val result = CartRepository.getCart(userId)
 
-            if (result.isSuccess) {
-                val items = result.getOrDefault(emptyList())
-                updateUi(items)
-            } else {
-                _ui.value = _ui.value.copy(
-                    isLoading = false,
-                    errorMsg = "Error cargando carrito: ${result.exceptionOrNull()?.message}"
-                )
+                if (result.isSuccess) {
+                    val items = result.getOrDefault(emptyList())
+                    updateUi(items)
+                } else {
+                    _ui.value = _ui.value.copy(
+                        isLoading = false,
+                        errorMsg = "Error cargando carrito: ${result.exceptionOrNull()?.message}"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("CartViewModel", "Crash en loadCart", e)
+                _ui.value = _ui.value.copy(isLoading = false, errorMsg = "Error inesperado al cargar")
             }
         }
     }
 
     // Agregar producto al backend
     fun add(p: Product) = viewModelScope.launch {
-        val pid = p.id ?: return@launch
+        // Validación extra para evitar crashes por ID nulo
+        val pid = p.id ?: run {
+            Log.e("CartViewModel", "Intento de agregar producto sin ID")
+            return@launch
+        }
+
         val userId = UserRepository.SessionManager.getUserId()
 
         _ui.value = _ui.value.copy(isLoading = true)
 
-        // Llamada al microservicio
-        val result = CartRepository.addItem(userId, pid, 1) // Agrega 1 unidad
+        try {
+            // Llamada al microservicio
+            val result = CartRepository.addItem(userId, pid, 1) // Agrega 1 unidad
 
-        if (result.isSuccess) {
-            val newItems = result.getOrDefault(emptyList())
-            updateUi(newItems)
-        } else {
-            val err = result.exceptionOrNull()?.message ?: "Error al agregar"
-            Log.e("CartViewModel", err)
-            _ui.value = _ui.value.copy(isLoading = false, errorMsg = err)
+            if (result.isSuccess) {
+                val newItems = result.getOrDefault(emptyList())
+                updateUi(newItems)
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "Error al agregar"
+                Log.e("CartViewModel", err)
+                _ui.value = _ui.value.copy(isLoading = false, errorMsg = err)
+            }
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Crash en add", e)
+            _ui.value = _ui.value.copy(isLoading = false, errorMsg = "Error crítico al agregar: ${e.message}")
         }
     }
 
@@ -81,51 +96,60 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
             return@launch
         }
 
-        // Calcular diferencia para saber cuánto sumar/restar (la API de 'addItem' suele ser incremental)
-        // O si tu API tiene 'updateItem' (PUT), úsalo. Asumimos addItem suma.
-        // Como tu API 'addItem' suma cantidad, si queremos fijar, mejor usamos updateItem si existe,
-        // o calculamos el delta.
-
-        // Simplificación: Si tienes endpoint update, úsalo. Si no, borra y agrega.
-        // Revisando tu CartService, tienes updateItem. ¡Usémoslo!
-
-        // Nota: CartRepository.addItem en tu código actual usa el endpoint POST /items
-        // Si quieres usar PUT para fijar cantidad exacta, necesitas agregarlo al Repo.
-        // Por ahora, usaremos addItem con la diferencia si es +1, o removeItem si es -1?
-        // Mejor: Implementar updateItem en Repo si es crítico.
-        // Para evitar crashes ahora, asumiremos que solo sumas de a 1 con add.
+        // Pendiente: Implementar actualización de cantidad exacta
+        // Por ahora no hacemos nada para evitar inconsistencias si no tenemos endpoint PUT directo configurado en Repo
     }
 
     // Eliminar ítem
     fun remove(productId: Long) = viewModelScope.launch {
         val userId = UserRepository.SessionManager.getUserId()
-        val result = CartRepository.removeItem(userId, productId)
+        try {
+            val result = CartRepository.removeItem(userId, productId)
 
-        if (result.isSuccess) {
-            updateUi(result.getOrDefault(emptyList()))
-        } else {
-            _ui.value = _ui.value.copy(errorMsg = "Error eliminando")
+            if (result.isSuccess) {
+                updateUi(result.getOrDefault(emptyList()))
+            } else {
+                _ui.value = _ui.value.copy(errorMsg = "Error eliminando")
+            }
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Crash en remove", e)
         }
     }
 
     private fun updateUi(items: List<CartItem>) {
-        // Recalcular totales localmente con los datos frescos del servidor
-        val totalItems = items.sumOf { it.qty }
-        val totalPrice = items.sumOf { it.qty * it.product.price }
+        try {
+            // Protección contra NullPointerException si los datos vienen incompletos
+            // (ej: si el backend devuelve items sin producto populado)
+            val totalItems = items.sumOf { it.qty }
 
-        // Aplicar cupón si existe
-        val (discount, _) = computeDiscount(totalPrice, _ui.value.couponCode)
-        val totalAfter = (totalPrice - discount).coerceAtLeast(0)
+            // Calculamos precio con seguridad. Si product es null (por error de mapeo), asumimos precio 0.
+            val totalPrice = items.sumOf {
+                try {
+                    it.qty * it.product.price
+                } catch (e: NullPointerException) {
+                    Log.w("CartViewModel", "Item sin producto o precio: $it")
+                    0
+                }
+            }
 
-        _ui.value = _ui.value.copy(
-            items = items,
-            totalItems = totalItems,
-            totalPrice = totalPrice,
-            discount = discount,
-            totalAfterDiscount = totalAfter,
-            isLoading = false,
-            errorMsg = null
-        )
+            // Aplicar cupón si existe
+            val (discount, _) = computeDiscount(totalPrice, _ui.value.couponCode)
+            val totalAfter = (totalPrice - discount).coerceAtLeast(0)
+
+            _ui.value = _ui.value.copy(
+                items = items,
+                totalItems = totalItems,
+                totalPrice = totalPrice,
+                discount = discount,
+                totalAfterDiscount = totalAfter,
+                isLoading = false,
+                errorMsg = null
+            )
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Error calculando totales UI", e)
+            // En caso de error grave en UI, mostramos lista vacía para no crashear
+            _ui.value = _ui.value.copy(isLoading = false, errorMsg = "Error visualizando carrito")
+        }
     }
 
     // Lógica de Cupones (Local)
