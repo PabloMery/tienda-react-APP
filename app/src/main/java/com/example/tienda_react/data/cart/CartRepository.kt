@@ -51,12 +51,11 @@ object CartRepository {
         return uiItems
     }
 
-    // --- OBTENER CARRITO ---
+    // --- OBTENER CARRITO (GET) ---
     suspend fun getCart(userId: Long): Result<List<CartItem>> {
         return try {
             val response = CartRetrofitClient.api.getCart(userId)
             if (response.isSuccessful && response.body() != null) {
-                // Aquí ocurre la magia de buscar los productos
                 val uiItems = mapBackendResponseToUi(response.body()!!.items)
                 Result.success(uiItems)
             } else {
@@ -68,7 +67,7 @@ object CartRepository {
         }
     }
 
-    // --- AGREGAR ITEM ---
+    // --- AGREGAR ITEM (POST) ---
     suspend fun addItem(userId: Long, productId: Long, quantity: Int): Result<List<CartItem>> {
         return try {
             val req = CartItemRequest(productId, quantity)
@@ -78,6 +77,8 @@ object CartRepository {
                 val uiItems = mapBackendResponseToUi(response.body()!!.items)
                 Result.success(uiItems)
             } else {
+                val errorBody = response.errorBody()?.string()
+                Log.e("CartRepo", "Error addItem: ${response.code()} - $errorBody")
                 Result.failure(Exception("Error al agregar: ${response.code()}"))
             }
         } catch (e: Exception) {
@@ -86,7 +87,28 @@ object CartRepository {
         }
     }
 
-    // --- ELIMINAR ITEM ---
+    // --- ACTUALIZAR CANTIDAD (PUT) --- [ESTO ES LO NUEVO QUE NECESITAS]
+    suspend fun updateQuantity(userId: Long, productId: Long, quantity: Int): Result<List<CartItem>> {
+        return try {
+            val req = CartItemRequest(productId, quantity)
+            // Llamamos al endpoint PUT definido en CartApiService
+            val response = CartRetrofitClient.api.updateItem(userId, req)
+
+            if (response.isSuccessful && response.body() != null) {
+                val uiItems = mapBackendResponseToUi(response.body()!!.items)
+                Result.success(uiItems)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Log.e("CartRepo", "Error updateItem: ${response.code()} - $errorBody")
+                Result.failure(Exception("Error al actualizar: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("CartRepo", "Excepción updateItem", e)
+            Result.failure(e)
+        }
+    }
+
+    // --- ELIMINAR ITEM (DELETE) ---
     suspend fun removeItem(userId: Long, productId: Long): Result<List<CartItem>> {
         return try {
             val response = CartRetrofitClient.api.removeItem(userId, productId)

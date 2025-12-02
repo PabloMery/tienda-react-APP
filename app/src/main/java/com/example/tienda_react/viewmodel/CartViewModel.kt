@@ -58,21 +58,19 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // Agregar producto al backend
+    // Agregar producto (desde el botón "Añadir al carrito" en detalle)
     fun add(p: Product) = viewModelScope.launch {
-        // Validación extra para evitar crashes por ID nulo
         val pid = p.id ?: run {
             Log.e("CartViewModel", "Intento de agregar producto sin ID")
             return@launch
         }
 
         val userId = UserRepository.SessionManager.getUserId()
-
         _ui.value = _ui.value.copy(isLoading = true)
 
         try {
-            // Llamada al microservicio
-            val result = CartRepository.addItem(userId, pid, 1) // Agrega 1 unidad
+            // Llama a addItem del Repo (POST)
+            val result = CartRepository.addItem(userId, pid, 1)
 
             if (result.isSuccess) {
                 val newItems = result.getOrDefault(emptyList())
@@ -88,19 +86,37 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // Modificar cantidad (Sumar/Restar)
+    // Modificar cantidad (Botones + y - en el carrito) [ESTO ES LO CORREGIDO]
     fun setQty(id: Long, qty: Int) = viewModelScope.launch {
         val userId = UserRepository.SessionManager.getUserId()
+
+        // 1. Si la cantidad es 0 o menor, borramos el ítem usando remove
         if (qty <= 0) {
-            remove(id) // Si baja a 0, borrar
+            remove(id)
             return@launch
         }
 
-        // Pendiente: Implementar actualización de cantidad exacta
-        // Por ahora no hacemos nada para evitar inconsistencias si no tenemos endpoint PUT directo configurado en Repo
+        _ui.value = _ui.value.copy(isLoading = true)
+
+        try {
+            // 2. Llamamos a la nueva función updateQuantity (PUT) del repositorio
+            val result = CartRepository.updateQuantity(userId, id, qty)
+
+            if (result.isSuccess) {
+                // 3. Actualizamos la UI con el carrito actualizado que devuelve el backend
+                val newItems = result.getOrDefault(emptyList())
+                updateUi(newItems)
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "Error al actualizar cantidad"
+                _ui.value = _ui.value.copy(isLoading = false, errorMsg = err)
+            }
+        } catch (e: Exception) {
+            Log.e("CartViewModel", "Crash en setQty", e)
+            _ui.value = _ui.value.copy(isLoading = false, errorMsg = "Error inesperado")
+        }
     }
 
-    // Eliminar ítem
+    // Eliminar ítem (Papelera)
     fun remove(productId: Long) = viewModelScope.launch {
         val userId = UserRepository.SessionManager.getUserId()
         try {
@@ -118,11 +134,9 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun updateUi(items: List<CartItem>) {
         try {
-            // Protección contra NullPointerException si los datos vienen incompletos
-            // (ej: si el backend devuelve items sin producto populado)
+            // Protección contra items incompletos
             val totalItems = items.sumOf { it.qty }
 
-            // Calculamos precio con seguridad. Si product es null (por error de mapeo), asumimos precio 0.
             val totalPrice = items.sumOf {
                 try {
                     it.qty * it.product.price
@@ -132,7 +146,7 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
 
-            // Aplicar cupón si existe
+            // Recalcular descuentos si hay cupón activo
             val (discount, _) = computeDiscount(totalPrice, _ui.value.couponCode)
             val totalAfter = (totalPrice - discount).coerceAtLeast(0)
 
@@ -147,7 +161,6 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
             )
         } catch (e: Exception) {
             Log.e("CartViewModel", "Error calculando totales UI", e)
-            // En caso de error grave en UI, mostramos lista vacía para no crashear
             _ui.value = _ui.value.copy(isLoading = false, errorMsg = "Error visualizando carrito")
         }
     }
