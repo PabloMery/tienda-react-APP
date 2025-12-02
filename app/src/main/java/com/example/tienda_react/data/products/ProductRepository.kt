@@ -11,41 +11,28 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 object ProductRepository {
 
-    // ... (getAllProducts, getProductById se mantienen igual) ...
     suspend fun getAllProducts(): Result<List<Product>> {
         return try {
-            val response = RetrofitClient.api.getProductos()
+            // CORRECCIÓN: Llamamos al puerto 8080
+            val response = RetrofitClient.productsApi.getProductos()
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                Result.failure(Exception("Error al cargar productos: ${response.code()}"))
+                Result.failure(Exception("Error HTTP: ${response.code()}"))
             }
         } catch (e: Exception) {
-            Log.e("API_PRODUCTOS", "Error conexión", e)
-            Result.failure(e)
-        }
-    }
-
-    suspend fun getProductById(id: Long): Result<Product> {
-        return try {
-            val response = RetrofitClient.api.getProductoById(id)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
-            } else {
-                Result.failure(Exception("Producto no encontrado"))
-            }
-        } catch (e: Exception) {
+            Log.e("ProductRepo", "Error al leer productos", e)
             Result.failure(e)
         }
     }
 
     suspend fun createProduct(product: Product): Result<Product> {
         return try {
-            val response = RetrofitClient.api.createProduct(product)
+            val response = RetrofitClient.productsApi.createProduct(product)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                Result.failure(Exception("Error al crear: ${response.code()}"))
+                Result.failure(Exception("Error creando: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -54,39 +41,40 @@ object ProductRepository {
 
     suspend fun deleteProduct(id: Long): Result<Unit> {
         return try {
-            val response = RetrofitClient.api.deleteProduct(id)
-            if (response.isSuccessful) {
-                Result.success(Unit)
-            } else {
-                Result.failure(Exception("Error al eliminar: ${response.code()}"))
-            }
+            val response = RetrofitClient.productsApi.deleteProduct(id)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Error eliminando: ${response.code()}"))
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    // --- NUEVA FUNCIÓN: Subir Imagen desde URI ---
     suspend fun uploadImage(context: Context, imageUri: Uri): Result<String> {
         return try {
-            // 1. Leer los bytes del archivo seleccionado
             val inputStream = context.contentResolver.openInputStream(imageUri)
-            val bytes = inputStream?.readBytes() ?: return Result.failure(Exception("No se pudo leer la imagen"))
-            inputStream.close()
+            val bytes = inputStream?.readBytes()
+            inputStream?.close()
 
-            // 2. Crear el cuerpo de la petición Multipart
+            if (bytes == null) return Result.failure(Exception("No se pudo leer imagen"))
+
             val requestFile = bytes.toRequestBody("image/*".toMediaTypeOrNull())
             val body = MultipartBody.Part.createFormData("file", "upload.jpg", requestFile)
 
-            // 3. Enviar al servidor
-            val response = RetrofitClient.api.uploadImage(body)
+            // Subimos la imagen al servicio de Productos (FileController está ahí)
+            val response = RetrofitClient.productsApi.uploadImage(body)
 
-            if (response.isSuccessful) {
-                // El servidor devuelve la URL relativa (ej: "/api/files/uuid_foto.jpg")
-                val url = response.body()?.string() ?: ""
-                Result.success(url)
-            } else {
-                Result.failure(Exception("Fallo al subir imagen: ${response.code()}"))
-            }
+            if (response.isSuccessful) Result.success(response.body()?.string() ?: "")
+            else Result.failure(Exception("Fallo upload: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getProductById(id: Long): Result<Product> {
+        return try {
+            val response = RetrofitClient.productsApi.getProductoById(id)
+            if (response.isSuccessful && response.body() != null) Result.success(response.body()!!)
+            else Result.failure(Exception("No encontrado"))
         } catch (e: Exception) {
             Result.failure(e)
         }

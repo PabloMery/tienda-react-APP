@@ -31,11 +31,57 @@ class ProductsViewModel : ViewModel() {
     fun loadProducts() {
         viewModelScope.launch {
             _uiState.value = ProductsUiState.Loading
-            val result = ProductRepository.getAllProducts()
-            result.fold(
-                onSuccess = { list -> _uiState.value = ProductsUiState.Success(list) },
-                onFailure = { ex -> _uiState.value = ProductsUiState.Error(ex.message ?: "Error desconocido") }
+            ProductRepository.getAllProducts().fold(
+                onSuccess = { _uiState.value = ProductsUiState.Success(it) },
+                onFailure = { _uiState.value = ProductsUiState.Error(it.message ?: "Error desconocido") }
             )
+        }
+    }
+
+    fun createProduct(context: Context, name: String, price: Int, category: String, stock: Int, imageUri: Uri?) {
+        viewModelScope.launch {
+            _adminMessage.value = "Subiendo imagen..."
+            var imgUrl = ""
+
+            // 1. Si hay imagen, la subimos primero
+            if (imageUri != null) {
+                val upload = ProductRepository.uploadImage(context, imageUri)
+                if (upload.isSuccess) imgUrl = upload.getOrDefault("")
+                else {
+                    _adminMessage.value = "Error subiendo imagen"
+                    return@launch
+                }
+            }
+
+            // 2. Creamos el producto con la URL obtenida
+            _adminMessage.value = "Guardando producto..."
+            val newProduct = Product(
+                name = name,
+                price = price,
+                category = category,
+                stock = stock,
+                images = if(imgUrl.isNotEmpty()) listOf(imgUrl) else null
+            )
+
+            val result = ProductRepository.createProduct(newProduct)
+            if (result.isSuccess) {
+                _adminMessage.value = "¡Producto Creado!"
+                loadProducts() // Recargar lista automáticamente
+            } else {
+                _adminMessage.value = "Error al crear: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun deleteProduct(id: Long?) {
+        if (id == null) return
+        viewModelScope.launch {
+            if (ProductRepository.deleteProduct(id).isSuccess) {
+                _adminMessage.value = "Eliminado"
+                loadProducts()
+            } else {
+                _adminMessage.value = "Error al eliminar"
+            }
         }
     }
 
@@ -48,65 +94,5 @@ class ProductsViewModel : ViewModel() {
         return ProductRepository.getProductById(id).getOrNull()
     }
 
-    // --- ADMIN: Crear con soporte de Imagen ---
-
-    fun createProduct(
-        context: Context,
-        name: String,
-        price: Int,
-        category: String,
-        stock: Int,
-        imageUri: Uri?
-    ) {
-        viewModelScope.launch {
-            _adminMessage.value = "Procesando..."
-
-            var finalImageUrl = ""
-
-            // 1. Si hay imagen seleccionada, subirla primero
-            if (imageUri != null) {
-                val uploadResult = ProductRepository.uploadImage(context, imageUri)
-                if (uploadResult.isSuccess) {
-                    finalImageUrl = uploadResult.getOrDefault("")
-                } else {
-                    _adminMessage.value = "Error subiendo imagen: ${uploadResult.exceptionOrNull()?.message}"
-                    return@launch
-                }
-            }
-
-            // 2. Crear el producto con la URL obtenida (o vacía)
-            val newProduct = Product(
-                name = name,
-                price = price,
-                category = category,
-                stock = stock,
-                images = if (finalImageUrl.isNotBlank()) listOf(finalImageUrl) else emptyList()
-            )
-
-            val result = ProductRepository.createProduct(newProduct)
-            if (result.isSuccess) {
-                _adminMessage.value = "Producto creado con éxito"
-                loadProducts()
-            } else {
-                _adminMessage.value = "Error al crear producto: ${result.exceptionOrNull()?.message}"
-            }
-        }
-    }
-
-    fun deleteProduct(id: Long?) {
-        if (id == null) return
-        viewModelScope.launch {
-            val result = ProductRepository.deleteProduct(id)
-            if (result.isSuccess) {
-                _adminMessage.value = "Producto eliminado"
-                loadProducts()
-            } else {
-                _adminMessage.value = "Error al eliminar: ${result.exceptionOrNull()?.message}"
-            }
-        }
-    }
-
-    fun clearAdminMessage() {
-        _adminMessage.value = null
-    }
+    fun clearAdminMessage() { _adminMessage.value = null }
 }

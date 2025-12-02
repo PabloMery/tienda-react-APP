@@ -18,22 +18,21 @@ import com.example.tienda_react.domain.Product
 import com.example.tienda_react.ui.components.ProductThumb
 import com.example.tienda_react.utils.asCLP
 import com.example.tienda_react.viewmodel.CartViewModel
-import com.example.tienda_react.viewmodel.ProductsViewModel
 import com.example.tienda_react.viewmodel.ProductsUiState
+import com.example.tienda_react.viewmodel.ProductsViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun ProductosScreen(
-    onOpen: (Int) -> Unit, // Ojo: tu navegación usa Int, aunque el ID sea Long. Haremos cast.
+    onOpen: (Int) -> Unit,
     onGoCart: () -> Unit,
     cartVm: CartViewModel,
-    // Inyectamos el ViewModel de productos
     productsVm: ProductsViewModel = viewModel()
 ) {
-    val cartUi = cartVm.ui.collectAsState().value
     val state by productsVm.uiState.collectAsState()
+    val cartUi = cartVm.ui.collectAsState().value
 
     Scaffold(
         topBar = {
@@ -44,7 +43,8 @@ fun ProductosScreen(
                         Text("🛒 ")
                         AnimatedContent(
                             targetState = cartUi.totalItems,
-                            transitionSpec = { fadeIn() with fadeOut() },
+                            // CORRECCIÓN: 'with' -> 'togetherWith'
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
                             label = "badge"
                         ) { count ->
                             Text("$count", style = MaterialTheme.typography.titleMedium)
@@ -64,7 +64,8 @@ fun ProductosScreen(
                         Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("Error: ${s.message}", color = MaterialTheme.colorScheme.error)
+                        Text("Error de conexión", color = MaterialTheme.colorScheme.error)
+                        Text(s.message, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(8.dp))
                         Button(onClick = { productsVm.loadProducts() }) { Text("Reintentar") }
                     }
@@ -73,11 +74,14 @@ fun ProductosScreen(
                     if (s.products.isEmpty()) {
                         Text("No hay productos disponibles.", Modifier.align(Alignment.Center))
                     } else {
-                        ProductList(
-                            products = s.products,
-                            onOpen = onOpen,
-                            onAddToCart = { cartVm.add(it) }
-                        )
+                        LazyColumn(
+                            Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(s.products) { p ->
+                                ProductCard(p, onOpen, onAdd = { cartVm.add(it) })
+                            }
+                        }
                     }
                 }
             }
@@ -86,67 +90,25 @@ fun ProductosScreen(
 }
 
 @Composable
-fun ProductList(
-    products: List<Product>,
-    onOpen: (Int) -> Unit,
-    onAddToCart: (Product) -> Unit
-) {
-    LazyColumn(
-        Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+fun ProductCard(p: Product, onOpen: (Int) -> Unit, onAdd: (Product) -> Unit) {
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, label = "scale")
+
+    Card(
+        modifier = Modifier.fillMaxWidth().scale(scale)
+            .clickable {
+                pressed = true
+                onOpen(p.id?.toInt() ?: 0)
+                pressed = false
+            }
     ) {
-        items(products) { p ->
-            var pressed by remember { mutableStateOf(false) }
-            val scale by animateFloatAsState(
-                targetValue = if (pressed) 0.96f else 1f,
-                animationSpec = spring(),
-                label = "card-scale"
-            )
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .scale(scale)
-                    .clickable {
-                        pressed = true
-                        // CORRECCIÓN: Usamos el operador safe call (?.) y el elvis (?:)
-                        // Si p.id es null, pasamos 0.
-                        onOpen(p.id?.toInt() ?: 0)
-                        pressed = false
-                    }
-            ) {
-                Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Usamos imageUrls (la propiedad computada que arregla el link)
-                    ProductThumb(
-                        urls = p.imageUrls,
-                        modifier = Modifier.size(100.dp),
-                        contentScale = ContentScale.Crop
-                    )
-                    Column(Modifier.weight(1f)) {
-                        Text(p.name, style = MaterialTheme.typography.titleMedium)
-                        Text(p.price.asCLP())
-                        Spacer(Modifier.height(8.dp))
-
-                        var bump by remember { mutableStateOf(false) }
-                        val bumpScale by animateFloatAsState(
-                            targetValue = if (bump) 1.1f else 1f,
-                            label = "bump"
-                        )
-                        val scope = rememberCoroutineScope()
-
-                        Button(
-                            onClick = {
-                                onAddToCart(p)
-                                bump = true
-                                scope.launch {
-                                    delay(120)
-                                    bump = false
-                                }
-                            },
-                            modifier = Modifier.scale(bumpScale)
-                        ) { Text("Añadir al carrito") }
-                    }
-                }
+        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ProductThumb(urls = p.imageUrls, modifier = Modifier.size(100.dp))
+            Column(Modifier.weight(1f)) {
+                Text(p.name, style = MaterialTheme.typography.titleMedium)
+                Text(p.price.asCLP())
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { onAdd(p) }) { Text("Añadir al carrito") }
             }
         }
     }

@@ -61,7 +61,7 @@ fun AdminScreen(
                     Button(
                         onClick = { productsVm.loadProducts() },
                         modifier = Modifier.align(Alignment.Center)
-                    ) { Text("Reintentar: ${s.message}") }
+                    ) { Text("Reintentar conexión") }
                 }
                 is ProductsUiState.Success -> {
                     LazyColumn(
@@ -76,11 +76,10 @@ fun AdminScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    // Usamos las URLs arregladas del modelo
                                     ProductThumb(urls = p.imageUrls, modifier = Modifier.size(60.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(p.name, style = MaterialTheme.typography.titleMedium)
-                                        Text("${p.price.asCLP()} - Stock: ${p.stock}", style = MaterialTheme.typography.bodySmall)
+                                        Text("${p.price.asCLP()} | Stock: ${p.stock}", style = MaterialTheme.typography.bodySmall)
                                     }
                                     IconButton(onClick = { productsVm.deleteProduct(p.id) }) {
                                         Icon(Icons.Default.Delete, contentDescription = "Borrar", tint = MaterialTheme.colorScheme.error)
@@ -116,10 +115,7 @@ fun CreateProductDialog(
     var category by remember { mutableStateOf("") }
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Launcher para abrir la galería
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedUri = uri
     }
 
@@ -127,10 +123,7 @@ fun CreateProductDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nuevo Producto") },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth() // Asegura ancho para la imagen
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") })
                 OutlinedTextField(
                     value = priceStr,
@@ -145,44 +138,18 @@ fun CreateProductDialog(
                     label = { Text("Stock") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
-
-                Spacer(Modifier.height(8.dp))
-
-                // Botón para seleccionar imagen
-                Button(
-                    onClick = { launcher.launch("image/*") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (selectedUri != null) "Cambiar Imagen" else "Seleccionar Imagen")
-                }
-
-                // Previsualización de la imagen seleccionada
-                if (selectedUri != null) {
-                    AsyncImage(
-                        model = selectedUri,
-                        contentDescription = "Preview",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .background(Color.LightGray),
-                        contentScale = ContentScale.Crop
-                    )
+                Button(onClick = { launcher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (selectedUri != null) "Imagen Seleccionada" else "Subir Imagen")
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val p = priceStr.toIntOrNull() ?: 0
-                    val s = stockStr.toIntOrNull() ?: 0
-                    if (name.isNotBlank() && p > 0) {
-                        onCreate(name, p, category, s, selectedUri)
-                    }
-                }
-            ) { Text("Guardar") }
+            Button(onClick = {
+                val p = priceStr.toIntOrNull() ?: 0
+                val s = stockStr.toIntOrNull() ?: 0
+                if (name.isNotBlank() && p > 0) onCreate(name, p, category, s, selectedUri)
+            }) { Text("Guardar") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 }

@@ -1,7 +1,6 @@
 package com.example.tienda_react.network
 
-import com.example.tienda_react.domain.Product
-import com.example.tienda_react.domain.User
+import com.example.tienda_react.domain.*
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.Response
@@ -9,14 +8,18 @@ import retrofit2.http.*
 
 interface ApiService {
 
-    // --- USUARIOS ---
+    // ============================
+    // MICROSERVICIO USUARIOS (8081)
+    // ============================
     @POST("api/usuarios/login")
     suspend fun login(@Body request: LoginRequestDto): Response<User>
 
     @POST("api/usuarios")
     suspend fun register(@Body user: User): Response<User>
 
-    // --- PRODUCTOS ---
+    // ============================
+    // MICROSERVICIO PRODUCTOS (8080)
+    // ============================
     @GET("api/productos")
     suspend fun getProductos(): Response<List<Product>>
 
@@ -29,13 +32,31 @@ interface ApiService {
     @DELETE("api/productos/{id}")
     suspend fun deleteProduct(@Path("id") id: Long): Response<Unit>
 
-    // --- ARCHIVOS ---
     @Multipart
     @POST("api/files/upload")
     suspend fun uploadImage(@Part file: MultipartBody.Part): Response<ResponseBody>
+
+    // ============================
+    // MICROSERVICIO CARRITO (8082)
+    // ============================
+    @GET("api/cart")
+    suspend fun getCart(@Header("X-User-Id") userId: Long): Response<CartResponse>
+
+    @POST("api/cart/items")
+    suspend fun addItemToCart(
+        @Header("X-User-Id") userId: Long,
+        @Body item: CartItemRequest
+    ): Response<CartResponse>
+
+    @DELETE("api/cart/items/{productId}")
+    suspend fun removeItemFromCart(
+        @Header("X-User-Id") userId: Long,
+        @Path("productId") productId: Long
+    ): Response<CartResponse>
+
+    @DELETE("api/cart")
+    suspend fun clearCart(@Header("X-User-Id") userId: Long): Response<CartResponse>
 }
 
-data class LoginRequestDto(
-    val correo: String,
-    val pass: String
-)
+// DTO para Login
+data class LoginRequestDto(val correo: String, val pass: String)
