@@ -1,41 +1,39 @@
 package com.example.tienda_react.ui.screens
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.with
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.tooling.preview.Devices
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.tienda_react.data.FakeData
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tienda_react.domain.Product
 import com.example.tienda_react.ui.components.ProductThumb
-import com.example.tienda_react.ui.theme.TiendaTheme
 import com.example.tienda_react.utils.asCLP
 import com.example.tienda_react.viewmodel.CartViewModel
+import com.example.tienda_react.viewmodel.ProductsViewModel
+import com.example.tienda_react.viewmodel.ProductsUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun ProductosScreen(
-    onOpen: (Int) -> Unit,
+    onOpen: (Int) -> Unit, // Ojo: tu navegación usa Int, aunque el ID sea Long. Haremos cast.
     onGoCart: () -> Unit,
-    cartVm: CartViewModel
+    cartVm: CartViewModel,
+    // Inyectamos el ViewModel de productos
+    productsVm: ProductsViewModel = viewModel()
 ) {
-    val ui = cartVm.ui.collectAsState().value
+    val cartUi = cartVm.ui.collectAsState().value
+    val state by productsVm.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -45,7 +43,7 @@ fun ProductosScreen(
                     TextButton(onClick = onGoCart) {
                         Text("🛒 ")
                         AnimatedContent(
-                            targetState = ui.totalItems,
+                            targetState = cartUi.totalItems,
                             transitionSpec = { fadeIn() with fadeOut() },
                             label = "badge"
                         ) { count ->
@@ -56,58 +54,30 @@ fun ProductosScreen(
             )
         }
     ) { pad ->
-        LazyColumn(
-            Modifier.padding(pad).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(FakeData.PRODUCTS) { p ->
-                var pressed by remember { mutableStateOf(false) }
-                val scale by animateFloatAsState(
-                    targetValue = if (pressed) 0.96f else 1f,
-                    animationSpec = spring(),
-                    label = "card-scale"
-                )
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .scale(scale)
-                        .clickable {
-                            pressed = true
-                            onOpen(p.id)
-                            pressed = false
-                        }
-                ) {
-                    Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ProductThumb(
-                            urls = p.images,
-                            modifier = Modifier.size(100.dp),
-                            contentScale = ContentScale.Crop
+        Box(Modifier.padding(pad).fillMaxSize()) {
+            when (val s = state) {
+                is ProductsUiState.Loading -> {
+                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                }
+                is ProductsUiState.Error -> {
+                    Column(
+                        Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Error: ${s.message}", color = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { productsVm.loadProducts() }) { Text("Reintentar") }
+                    }
+                }
+                is ProductsUiState.Success -> {
+                    if (s.products.isEmpty()) {
+                        Text("No hay productos disponibles.", Modifier.align(Alignment.Center))
+                    } else {
+                        ProductList(
+                            products = s.products,
+                            onOpen = onOpen,
+                            onAddToCart = { cartVm.add(it) }
                         )
-                        Column(Modifier.weight(1f)) {
-                            Text(p.name, style = MaterialTheme.typography.titleMedium)
-                            Text("${p.price.asCLP()}")
-                            Spacer(Modifier.height(8.dp))
-
-                            var bump by remember { mutableStateOf(false) }
-                            val bumpScale by animateFloatAsState(
-                                targetValue = if (bump) 1.1f else 1f,
-                                label = "bump"
-                            )
-                            val scope = rememberCoroutineScope()
-
-                            Button(
-                                onClick = {
-                                    cartVm.add(p)
-                                    bump = true
-                                    scope.launch {
-                                        delay(120)
-                                        bump = false
-                                    }
-                                },
-                                modifier = Modifier.scale(bumpScale)
-                            ) { Text("Añadir al carrito") }
-                        }
                     }
                 }
             }
@@ -115,51 +85,68 @@ fun ProductosScreen(
     }
 }
 
-/* ---------------- PREVIEWS (sin VM) ---------------- */
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProductosScreenStatic() {
-    Scaffold(topBar = { TopAppBar(title = { Text("Productos") }) }) { pad ->
-        LazyColumn(
-            Modifier.padding(pad).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(FakeData.PRODUCTS) { p ->
-                Card(Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ProductThumb(
-                            urls = p.images,
-                            modifier = Modifier.size(100.dp),
-                            contentScale = ContentScale.Crop
+fun ProductList(
+    products: List<Product>,
+    onOpen: (Int) -> Unit,
+    onAddToCart: (Product) -> Unit
+) {
+    LazyColumn(
+        Modifier.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(products) { p ->
+            var pressed by remember { mutableStateOf(false) }
+            val scale by animateFloatAsState(
+                targetValue = if (pressed) 0.96f else 1f,
+                animationSpec = spring(),
+                label = "card-scale"
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(scale)
+                    .clickable {
+                        pressed = true
+                        // Convertimos Long a Int para la navegación legacy
+                        onOpen(p.id.toInt())
+                        pressed = false
+                    }
+            ) {
+                Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Usamos imageUrls (la propiedad computada que arregla el link)
+                    ProductThumb(
+                        urls = p.imageUrls,
+                        modifier = Modifier.size(100.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(p.name, style = MaterialTheme.typography.titleMedium)
+                        Text(p.price.asCLP())
+                        Spacer(Modifier.height(8.dp))
+
+                        var bump by remember { mutableStateOf(false) }
+                        val bumpScale by animateFloatAsState(
+                            targetValue = if (bump) 1.1f else 1f,
+                            label = "bump"
                         )
-                        Column(Modifier.weight(1f)) {
-                            Text(p.name, style = MaterialTheme.typography.titleMedium)
-                            Text("${p.price}")
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = { }) { Text("Añadir al carrito") }
-                        }
+                        val scope = rememberCoroutineScope()
+
+                        Button(
+                            onClick = {
+                                onAddToCart(p)
+                                bump = true
+                                scope.launch {
+                                    delay(120)
+                                    bump = false
+                                }
+                            },
+                            modifier = Modifier.scale(bumpScale)
+                        ) { Text("Añadir al carrito") }
                     }
                 }
             }
         }
     }
-}
-
-@Preview(name = "Productos – Lista", showBackground = true, showSystemUi = true, device = Devices.PIXEL_7)
-@Composable
-fun Productos_List_Preview() {
-    TiendaTheme { ProductosScreenStatic() }
-}
-
-@Preview(name = "Productos – Dark", showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
-@Composable
-fun Productos_List_Dark_Preview() {
-    TiendaTheme { ProductosScreenStatic() }
-}
-
-@Preview(name = "Productos – Texto grande", showBackground = true, fontScale = 1.2f)
-@Composable
-fun Productos_List_Font_Preview() {
-    TiendaTheme { ProductosScreenStatic() }
 }

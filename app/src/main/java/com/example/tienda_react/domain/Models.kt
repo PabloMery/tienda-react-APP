@@ -1,56 +1,60 @@
 package com.example.tienda_react.domain
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// --- CLASES DE PRODUCTOS (Se mantienen igual) ---
+// Helper para arreglar URLs
+fun fixImageUrl(url: String): String {
+    if (url.startsWith("http") || url.startsWith("file://")) return url
+    val baseUrl = "http://10.0.2.2:8080"
+    val cleanUrl = if (url.startsWith("/")) url else "/$url"
+    return "$baseUrl$cleanUrl"
+}
+
 @Serializable
 data class Product(
-    val id: Int,
+    val id: Long,
     val name: String,
     val price: Int,
     val category: String,
     val stock: Int,
     val images: List<String> = emptyList()
+) {
+    val imageUrls: List<String>
+        get() = images.map { fixImageUrl(it) }
+}
+
+@Serializable
+data class CartItem(
+    val id: Long,
+    val product: Product,
+    val qty: Int
 )
 
 @Serializable
-data class CartItem(val id: Int, val product: Product, val qty: Int)
-
-// --- CLASE USER CORREGIDA ---
-@Serializable
 data class User(
-    // CORRECCIÓN: Cambiado a Long? (nullable) e inicializado en null
-    // Esto hará que al convertirlo a JSON, el campo "id" no se envíe o viaje como null
     val id: Long? = null,
-
     val nombre: String,
     val correo: String,
-
-    // Mapeo para que Android use "contrasena" pero la API reciba "pass"
-    @SerializedName("pass")
+    @SerialName("pass")
     val contrasena: String,
-
     val telefono: String? = null,
     val region: String,
     val comuna: String
 )
+
+// --- NUEVAS CLASES PARA EL MICROSERVICIO DE CARRITO (Puerto 8082) ---
+
+// Lo que enviamos para agregar/actualizar ítems
 @Serializable
 data class CartItemRequest(
     val productId: Long,
     val quantity: Int
 )
 
+// Lo que responde el servidor del carrito
 @Serializable
 data class CartResponse(
-    val id: Long,
-    val userId: Long,
-    val status: String,
-    val items: List<CartItemResponse>
-)
-
-@Serializable
-data class CartItemResponse(
-    val productId: Long,
-    val quantity: Int
+    val items: List<CartItem> = emptyList(), // Asume que el microservice devuelve la estructura completa
+    val totalPrice: Int = 0
 )

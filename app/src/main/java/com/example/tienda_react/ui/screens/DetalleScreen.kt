@@ -7,30 +7,54 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.tooling.preview.Devices
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.tienda_react.data.FakeData
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.tienda_react.domain.Product
 import com.example.tienda_react.ui.components.ProductThumb
-import com.example.tienda_react.ui.theme.TiendaTheme
+import com.example.tienda_react.utils.asCLP
 import com.example.tienda_react.viewmodel.CartViewModel
+import com.example.tienda_react.viewmodel.ProductsViewModel
 
 @Composable
 fun DetalleScreen(
     id: Int,
     onGoCarrito: () -> Unit,
-    cartVm: CartViewModel
+    cartVm: CartViewModel,
+    // Usamos el mismo ViewModel para no recargar si ya tenemos la lista
+    productsVm: ProductsViewModel = viewModel()
 ) {
-    val p = remember(id) { FakeData.byId(id) }
-    DetalleContent(
-        product = p,
-        onAdd = { repeat(it) { cartVm.add(p) } },
-        onGoCarrito = onGoCarrito
-    )
+    // Estado para guardar el producto cargado
+    var product by remember { mutableStateOf<Product?>(null) }
+    var loading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(id) {
+        // Pedimos al VM que busque el producto (en cache o API)
+        product = productsVm.getProductDetail(id.toLong())
+        loading = false
+    }
+
+    if (loading) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        val p = product
+        if (p != null) {
+            DetalleContent(
+                product = p,
+                onAdd = { qty -> repeat(qty) { cartVm.add(p) } },
+                onGoCarrito = onGoCarrito
+            )
+        } else {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Producto no encontrado")
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,7 +65,8 @@ private fun DetalleContent(
     onGoCarrito: () -> Unit
 ) {
     var qty by remember { mutableStateOf(1) }
-    val images = remember(product.id) { product.images.ifEmpty { listOf<String>() } }
+    // Usamos imageUrls corregidas
+    val images = remember(product.id) { product.imageUrls.ifEmpty { listOf<String>() } }
     var selected by remember(product.id) { mutableStateOf(0) }
 
     Scaffold(topBar = { TopAppBar(title = { Text(product.name) }) }) { pad ->
@@ -83,60 +108,30 @@ private fun DetalleContent(
                 Spacer(Modifier.height(8.dp))
             }
 
-            Text("Precio: $${product.price}", style = MaterialTheme.typography.titleLarge)
+            Text("Precio: ${product.price.asCLP()}", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(4.dp))
+            Text("Categoría: ${product.category}", style = MaterialTheme.typography.bodyMedium)
+            Text("Stock disponible: ${product.stock}", style = MaterialTheme.typography.bodySmall)
+
             Spacer(Modifier.height(8.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onClick = { if (qty > 1) qty-- }) { Text("-") }
                 Text("$qty", style = MaterialTheme.typography.titleMedium)
-                OutlinedButton(onClick = { qty++ }) { Text("+") }
+                OutlinedButton(onClick = { if (qty < product.stock) qty++ }) { Text("+") }
             }
 
             Spacer(Modifier.height(12.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onAdd(qty) }) { Text("Añadir al carrito") }
+                Button(
+                    onClick = { onAdd(qty) },
+                    enabled = product.stock > 0
+                ) {
+                    Text(if (product.stock > 0) "Añadir al carrito" else "Agotado")
+                }
                 OutlinedButton(onClick = onGoCarrito) { Text("Ir al carrito") }
             }
         }
-    }
-}
-
-/* ---------------- PREVIEWS ---------------- */
-
-private fun sampleProduct(): Product = Product(
-    id = 99,
-    name = "Skate Demo Pack",
-    price = 59_990,
-    category = "Patinetas",
-    stock = 10,
-    images = listOf(
-        "file:///android_asset/IMG/Patinetas/skate1a.jpg",
-        "file:///android_asset/IMG/Patinetas/skate2a.jpg",
-        "file:///android_asset/IMG/Patinetas/skate3a.jpg"
-    )
-)
-
-@Preview(name = "Detalle – Pixel 7", showBackground = true, showSystemUi = true, device = Devices.PIXEL_7)
-@Composable
-fun Detalle_Preview() {
-    TiendaTheme {
-        DetalleContent(
-            product = sampleProduct(),
-            onAdd = { },
-            onGoCarrito = { }
-        )
-    }
-}
-
-@Preview(name = "Detalle – Dark", showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
-@Composable
-fun Detalle_Dark_Preview() {
-    TiendaTheme {
-        DetalleContent(
-            product = sampleProduct(),
-            onAdd = { },
-            onGoCarrito = { }
-        )
     }
 }

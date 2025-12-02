@@ -116,5 +116,5 @@ object FakeData {
         )
     )
 
-    fun byId(id: Int) = PRODUCTS.first { it.id == id }
+    fun byId(id: Int) = PRODUCTS.first { it.id.toInt() == id }
 }
