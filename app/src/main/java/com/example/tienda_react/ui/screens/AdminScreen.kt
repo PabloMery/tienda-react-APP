@@ -1,21 +1,28 @@
 package com.example.tienda_react.ui.screens
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.tienda_react.ui.components.ProductThumb
 import com.example.tienda_react.utils.asCLP
 import com.example.tienda_react.viewmodel.ProductsUiState
@@ -30,7 +37,6 @@ fun AdminScreen(
     val adminMsg by productsVm.adminMessage.collectAsState()
     val context = LocalContext.current
 
-    // Mostrar Toasts con feedback
     LaunchedEffect(adminMsg) {
         adminMsg?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
@@ -38,11 +44,10 @@ fun AdminScreen(
         }
     }
 
-    // Estado del formulario de creación (Dialog)
     var showDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Administración") }) },
+        topBar = { TopAppBar(title = { Text("Panel Administrador") }) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Crear")
@@ -71,6 +76,7 @@ fun AdminScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
+                                    // Usamos las URLs arregladas del modelo
                                     ProductThumb(urls = p.imageUrls, modifier = Modifier.size(60.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(p.name, style = MaterialTheme.typography.titleMedium)
@@ -91,8 +97,8 @@ fun AdminScreen(
     if (showDialog) {
         CreateProductDialog(
             onDismiss = { showDialog = false },
-            onCreate = { name, price, cat, stock, img ->
-                productsVm.createProduct(name, price, cat, stock, img)
+            onCreate = { name, price, cat, stock, uri ->
+                productsVm.createProduct(context, name, price, cat, stock, uri)
                 showDialog = false
             }
         )
@@ -102,19 +108,29 @@ fun AdminScreen(
 @Composable
 fun CreateProductDialog(
     onDismiss: () -> Unit,
-    onCreate: (String, Int, String, Int, String) -> Unit
+    onCreate: (String, Int, String, Int, Uri?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var priceStr by remember { mutableStateOf("") }
     var stockStr by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
-    var imgUrl by remember { mutableStateOf("") }
+    var selectedUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Launcher para abrir la galería
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedUri = uri
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nuevo Producto") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth() // Asegura ancho para la imagen
+            ) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") })
                 OutlinedTextField(
                     value = priceStr,
@@ -129,7 +145,29 @@ fun CreateProductDialog(
                     label = { Text("Stock") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
-                OutlinedTextField(value = imgUrl, onValueChange = { imgUrl = it }, label = { Text("URL Imagen (opcional)") })
+
+                Spacer(Modifier.height(8.dp))
+
+                // Botón para seleccionar imagen
+                Button(
+                    onClick = { launcher.launch("image/*") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (selectedUri != null) "Cambiar Imagen" else "Seleccionar Imagen")
+                }
+
+                // Previsualización de la imagen seleccionada
+                if (selectedUri != null) {
+                    AsyncImage(
+                        model = selectedUri,
+                        contentDescription = "Preview",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .background(Color.LightGray),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
         },
         confirmButton = {
@@ -138,7 +176,7 @@ fun CreateProductDialog(
                     val p = priceStr.toIntOrNull() ?: 0
                     val s = stockStr.toIntOrNull() ?: 0
                     if (name.isNotBlank() && p > 0) {
-                        onCreate(name, p, category, s, imgUrl)
+                        onCreate(name, p, category, s, selectedUri)
                     }
                 }
             ) { Text("Guardar") }

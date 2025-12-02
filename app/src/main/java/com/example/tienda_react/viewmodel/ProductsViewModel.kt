@@ -1,5 +1,7 @@
 package com.example.tienda_react.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tienda_react.data.products.ProductRepository
@@ -19,11 +21,8 @@ class ProductsViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<ProductsUiState>(ProductsUiState.Loading)
     val uiState: StateFlow<ProductsUiState> = _uiState
 
-    // Estado para feedback de operaciones de admin (ej: "Producto creado!")
     private val _adminMessage = MutableStateFlow<String?>(null)
     val adminMessage: StateFlow<String?> = _adminMessage
-
-    private var currentProduct: Product? = null
 
     init {
         loadProducts()
@@ -34,12 +33,8 @@ class ProductsViewModel : ViewModel() {
             _uiState.value = ProductsUiState.Loading
             val result = ProductRepository.getAllProducts()
             result.fold(
-                onSuccess = { list ->
-                    _uiState.value = ProductsUiState.Success(list)
-                },
-                onFailure = { ex ->
-                    _uiState.value = ProductsUiState.Error(ex.message ?: "Error desconocido")
-                }
+                onSuccess = { list -> _uiState.value = ProductsUiState.Success(list) },
+                onFailure = { ex -> _uiState.value = ProductsUiState.Error(ex.message ?: "Error desconocido") }
             )
         }
     }
@@ -50,38 +45,61 @@ class ProductsViewModel : ViewModel() {
             val found = state.products.find { it.id == id }
             if (found != null) return found
         }
-        val apiResult = ProductRepository.getProductById(id)
-        return apiResult.getOrNull()
+        return ProductRepository.getProductById(id).getOrNull()
     }
 
-    // --- ACCIONES DE ADMIN ---
+    // --- ADMIN: Crear con soporte de Imagen ---
 
-    fun createProduct(name: String, price: Int, category: String, stock: Int, imageUrl: String) {
+    fun createProduct(
+        context: Context,
+        name: String,
+        price: Int,
+        category: String,
+        stock: Int,
+        imageUri: Uri?
+    ) {
         viewModelScope.launch {
+            _adminMessage.value = "Procesando..."
+
+            var finalImageUrl = ""
+
+            // 1. Si hay imagen seleccionada, subirla primero
+            if (imageUri != null) {
+                val uploadResult = ProductRepository.uploadImage(context, imageUri)
+                if (uploadResult.isSuccess) {
+                    finalImageUrl = uploadResult.getOrDefault("")
+                } else {
+                    _adminMessage.value = "Error subiendo imagen: ${uploadResult.exceptionOrNull()?.message}"
+                    return@launch
+                }
+            }
+
+            // 2. Crear el producto con la URL obtenida (o vacía)
             val newProduct = Product(
-                id = 0, // El backend asignará el ID real
                 name = name,
                 price = price,
                 category = category,
                 stock = stock,
-                images = if (imageUrl.isNotBlank()) listOf(imageUrl) else emptyList()
+                images = if (finalImageUrl.isNotBlank()) listOf(finalImageUrl) else emptyList()
             )
+
             val result = ProductRepository.createProduct(newProduct)
             if (result.isSuccess) {
                 _adminMessage.value = "Producto creado con éxito"
-                loadProducts() // Recargar la lista
+                loadProducts()
             } else {
-                _adminMessage.value = "Error: ${result.exceptionOrNull()?.message}"
+                _adminMessage.value = "Error al crear producto: ${result.exceptionOrNull()?.message}"
             }
         }
     }
 
-    fun deleteProduct(id: Long) {
+    fun deleteProduct(id: Long?) {
+        if (id == null) return
         viewModelScope.launch {
             val result = ProductRepository.deleteProduct(id)
             if (result.isSuccess) {
                 _adminMessage.value = "Producto eliminado"
-                loadProducts() // Recargar la lista para quitar el borrado
+                loadProducts()
             } else {
                 _adminMessage.value = "Error al eliminar: ${result.exceptionOrNull()?.message}"
             }

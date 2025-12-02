@@ -1,9 +1,9 @@
 package com.example.tienda_react.domain
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import com.google.gson.annotations.SerializedName
+import java.io.Serializable
 
-// Helper para arreglar URLs
+// Helper para arreglar URLs relativas del backend
 fun fixImageUrl(url: String): String {
     if (url.startsWith("http") || url.startsWith("file://")) return url
     val baseUrl = "http://10.0.2.2:8080"
@@ -11,50 +11,47 @@ fun fixImageUrl(url: String): String {
     return "$baseUrl$cleanUrl"
 }
 
-@Serializable
 data class Product(
-    val id: Long,
+    val id: Long? = null,
     val name: String,
     val price: Int,
     val category: String,
     val stock: Int,
-    val images: List<String> = emptyList()
-) {
+
+    // CAMBIO CLAVE: Hacemos la lista nullable (List<String>?)
+    // Gson le asignará 'null' si viene null del servidor.
+    val images: List<String>? = null
+) : Serializable {
+
+    // Propiedad computada segura:
+    // Si 'images' es null, devolvemos una lista vacía para que la UI no se rompa.
     val imageUrls: List<String>
-        get() = images.map { fixImageUrl(it) }
+        get() = images?.map { fixImageUrl(it) } ?: emptyList()
 }
 
-@Serializable
 data class CartItem(
     val id: Long,
     val product: Product,
     val qty: Int
 )
 
-@Serializable
 data class User(
     val id: Long? = null,
     val nombre: String,
     val correo: String,
-    @SerialName("pass")
+    @SerializedName("pass")
     val contrasena: String,
     val telefono: String? = null,
     val region: String,
     val comuna: String
-)
+) : Serializable
 
-// --- NUEVAS CLASES PARA EL MICROSERVICIO DE CARRITO (Puerto 8082) ---
-
-// Lo que enviamos para agregar/actualizar ítems
-@Serializable
 data class CartItemRequest(
     val productId: Long,
     val quantity: Int
 )
 
-// Lo que responde el servidor del carrito
-@Serializable
 data class CartResponse(
-    val items: List<CartItem> = emptyList(), // Asume que el microservice devuelve la estructura completa
+    val items: List<CartItem> = emptyList(),
     val totalPrice: Int = 0
 )

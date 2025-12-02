@@ -37,11 +37,14 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Añadir 1 unidad del producto al carrito */
     fun add(p: Product) = viewModelScope.launch {
+        // CORRECCIÓN: Manejar ID nulo. Si el producto no tiene ID (raro si viene del backend), usamos 0 o retornamos.
+        val productId = p.id ?: return@launch
+
         val cur = _ui.value.items
-        val ex = cur.find { it.id == p.id }
+        val ex = cur.find { it.id == productId }
         val newItems =
-            if (ex == null) cur + CartItem(p.id, p, 1)
-            else cur.map { if (it.id == p.id) it.copy(qty = it.qty + 1) else it }
+            if (ex == null) cur + CartItem(productId, p, 1)
+            else cur.map { if (it.id == productId) it.copy(qty = it.qty + 1) else it }
         persist(newItems)
     }
 
@@ -55,7 +58,6 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Eliminar ítem. ID es Long */
     fun remove(id: Long) = viewModelScope.launch {
-        // Usamos filter explícito para evitar ambigüedad con operador minus (-)
         val newItems = _ui.value.items.filter { it.id != id }
         persist(newItems)
     }
@@ -66,7 +68,6 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun calc(items: List<CartItem>, coupon: String? = null): CartUiState {
-        // sumOf puede ser ambiguo con Ints, usamos fold para certeza total
         val totalItems = items.fold(0) { acc, item -> acc + item.qty }
         val totalPrice = items.fold(0) { acc, item -> acc + (item.qty * item.product.price) }
 
@@ -84,9 +85,6 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    // ---------------------------
-    // 💸 Lógica de cupones
-    // ---------------------------
     private val percentCoupons = mapOf(
         "SAVE10" to 10,
         "SAVE20" to 20
@@ -100,7 +98,6 @@ class CartViewModel(app: Application) : AndroidViewModel(app) {
         if (code.isNullOrBlank()) return 0 to null
         val normalized = code.trim().uppercase()
 
-        // Usamos variables explícitas (percent, amount) en lugar de 'it'
         percentCoupons[normalized]?.let { percent ->
             val d = (total * (percent / 100.0)).roundToInt()
             return d to null

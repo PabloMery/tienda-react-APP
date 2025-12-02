@@ -109,8 +109,9 @@ fun ProductList(
                     .scale(scale)
                     .clickable {
                         pressed = true
-                        // Convertimos Long a Int para la navegación legacy
-                        onOpen(p.id.toInt())
+                        // CORRECCIÓN: Usamos el operador safe call (?.) y el elvis (?:)
+                        // Si p.id es null, pasamos 0.
+                        onOpen(p.id?.toInt() ?: 0)
                         pressed = false
                     }
             ) {

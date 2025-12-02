@@ -2,12 +2,10 @@ package com.example.tienda_react.network
 
 import com.example.tienda_react.domain.Product
 import com.example.tienda_react.domain.User
+import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Response
-import retrofit2.http.Body
-import retrofit2.http.DELETE
-import retrofit2.http.GET
-import retrofit2.http.POST
-import retrofit2.http.Path
+import retrofit2.http.*
 
 interface ApiService {
 
@@ -25,12 +23,16 @@ interface ApiService {
     @GET("api/productos/{id}")
     suspend fun getProductoById(@Path("id") id: Long): Response<Product>
 
-    // NUEVOS ENDPOINTS PARA ADMIN
     @POST("api/productos")
     suspend fun createProduct(@Body product: Product): Response<Product>
 
     @DELETE("api/productos/{id}")
     suspend fun deleteProduct(@Path("id") id: Long): Response<Unit>
+
+    // --- ARCHIVOS ---
+    @Multipart
+    @POST("api/files/upload")
+    suspend fun uploadImage(@Part file: MultipartBody.Part): Response<ResponseBody>
 }
 
 data class LoginRequestDto(
