@@ -106,7 +106,10 @@ fun AppNav() {
                 CarritoScreen(cartVm = cartVm)
             }
             composable(Route.Admin.route) {
-                AdminScreen(productsVm = productsVm)
+                AdminScreen(
+                    navController = nav,
+                    viewModel = productsVm // O 'viewModel' según como se llame la variable en tu AppNav
+                )
             }
 
             // Extras
